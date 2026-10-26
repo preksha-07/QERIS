@@ -1,4 +1,4 @@
-# QERIS — S1 cryptographic prototype
+# S1 cryptographic prototype
 
 This repository contains the S1 cryptographic building blocks and a local in-process simulator. It is **not yet the integrated gateway Demo 1**.
 
