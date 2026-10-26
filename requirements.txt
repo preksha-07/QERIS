@@ -1,0 +1,3 @@
+﻿# Versions validated on the demo machine
+cryptography==50.0.2
+liboqs-python==0.16.0.1
