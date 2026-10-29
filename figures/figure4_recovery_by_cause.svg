@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="680" height="420" viewBox="0 0 680 420">
+<style>
+  text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+  .title { font-size: 16px; font-weight: 700; fill: #1e293b; }
+  .axis-label { font-size: 13px; font-weight: 600; fill: #475569; }
+  .tick-label { font-size: 12px; fill: #64748b; }
+  .val-label { font-size: 12px; font-weight: 600; fill: #0f172a; text-anchor: middle; }
+</style>
+<rect width="100%" height="100%" fill="#ffffff" />
+<text x="340.0" y="32" class="title" text-anchor="middle">Figure 4: QERIS Recovery & Enforcement Success by Cause Class</text>
+<text x="340.0" y="50" font-size="11" fill="#64748b" text-anchor="middle">Network recovery for benign faults; 100% rejection for security violations</text>
+<line x1="90" y1="340.0" x2="610" y2="340.0" stroke="#e2e8f0" stroke-width="1"/>
+<text x="78" y="344.0" class="tick-label" text-anchor="end">0%</text>
+<line x1="90" y1="275.0" x2="610" y2="275.0" stroke="#e2e8f0" stroke-width="1"/>
+<text x="78" y="279.0" class="tick-label" text-anchor="end">25%</text>
+<line x1="90" y1="210.0" x2="610" y2="210.0" stroke="#e2e8f0" stroke-width="1"/>
+<text x="78" y="214.0" class="tick-label" text-anchor="end">50%</text>
+<line x1="90" y1="145.0" x2="610" y2="145.0" stroke="#e2e8f0" stroke-width="1"/>
+<text x="78" y="149.0" class="tick-label" text-anchor="end">75%</text>
+<line x1="90" y1="80.0" x2="610" y2="80.0" stroke="#e2e8f0" stroke-width="1"/>
+<text x="78" y="84.0" class="tick-label" text-anchor="end">100%</text>
+<line x1="90" y1="340" x2="610" y2="340" stroke="#334155" stroke-width="1.5"/>
+<line x1="90" y1="80" x2="90" y2="340" stroke="#334155" stroke-width="1.5"/>
+<text x="28" y="210.0" class="axis-label" transform="rotate(-90 28 210.0)" text-anchor="middle">Resolution / Enforcement Rate (%)</text>
+<rect x="140.0" y="111.19999999999999" width="80" height="228.8" fill="#38bdf8" stroke="#0284c7" stroke-width="1.5" rx="4"/>
+<text x="180" y="103.19999999999999" class="val-label">88.0%</text>
+<text x="180" y="364" class="axis-label" text-anchor="middle">Loss / Timeout</text>
+<text x="180" y="380" font-size="11" fill="#64748b" text-anchor="middle">Bounded Retry</text>
+<rect x="300.0" y="85.20000000000002" width="80" height="254.79999999999998" fill="#10b981" stroke="#047857" stroke-width="1.5" rx="4"/>
+<text x="340" y="77.20000000000002" class="val-label">98.0%</text>
+<text x="340" y="364" class="axis-label" text-anchor="middle">MTU / Fragmentation</text>
+<text x="340" y="380" font-size="11" fill="#64748b" text-anchor="middle">Adaptive Refragment</text>
+<rect x="460.0" y="80.0" width="80" height="260.0" fill="#6366f1" stroke="#4338ca" stroke-width="1.5" rx="4"/>
+<text x="500" y="72.0" class="val-label">100.0%</text>
+<text x="500" y="364" class="axis-label" text-anchor="middle">Security Failure</text>
+<text x="500" y="380" font-size="11" fill="#64748b" text-anchor="middle">Discard & Quarantine</text>
+</svg>

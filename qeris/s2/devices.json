@@ -1,0 +1,11 @@
+{
+    "device_001": {
+        "supported_modes": ["CLASSICAL", "HYBRID"]
+    },
+    "device_002": {
+        "supported_modes": ["CLASSICAL", "HYBRID", "PQC"]
+    },
+    "device_003": {
+        "supported_modes": ["CLASSICAL"]
+    }
+}

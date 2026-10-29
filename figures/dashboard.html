@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>QERIS S4: Empirical Evaluation Dashboard</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f1f5f9; color: #0f172a; margin: 0; padding: 24px; }
+    .container { max-width: 1200px; margin: 0 auto; }
+    header { background: #ffffff; padding: 28px; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); margin-bottom: 24px; }
+    h1 { margin: 0 0 8px 0; color: #1e293b; font-size: 24px; }
+    p.subtitle { margin: 0; color: #64748b; font-size: 14px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(540px, 1fr)); gap: 24px; }
+    .card { background: #ffffff; padding: 20px; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); border: 1px solid #e2e8f0; }
+    .card h2 { font-size: 16px; margin: 0 0 12px 0; color: #334155; }
+    .card img { width: 100%; height: auto; border-radius: 6px; }
+    .caption { margin-top: 12px; font-size: 13px; color: #475569; line-height: 1.5; background: #f8fafc; padding: 10px 14px; border-radius: 6px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>QERIS Empirical Evaluation Dashboard</h1>
+      <p.subtitle>Experimental evaluation of Sensitivity-Aware and Failure-Resilient Post-Quantum Gateway across 7 baselines</p>
+    </header>
+    <div class="grid">
+      <div class="card">
+        <h2>Figure1 Latency By Mode</h2>
+        <img src="figure1_latency_by_mode.svg" alt="figure1_latency_by_mode.svg"/>
+        <div class="caption">Handshake latency across Classical, Hybrid, and PQC modes on calibrated ESP32 constrained hardware. Shows median and IQR error bars.</div>
+      </div>
+      <div class="card">
+        <h2>Figure2 Bandwidth Overhead</h2>
+        <img src="figure2_bandwidth_overhead.svg" alt="figure2_bandwidth_overhead.svg"/>
+        <div class="caption">Wire overhead per handshake. ML-KEM-512 PQC pushes handshake size past 1280 B IPv6 MTU, motivating cause-aware MTU re-fragmentation.</div>
+      </div>
+      <div class="card">
+        <h2>Figure3 Success Vs Loss Rate</h2>
+        <img src="figure3_success_vs_loss_rate.svg" alt="figure3_success_vs_loss_rate.svg"/>
+        <div class="caption">Handshake reliability under uniform and burst loss. Full Gateway sustains >85% success while static baselines collapse.</div>
+      </div>
+      <div class="card">
+        <h2>Figure4 Recovery By Cause</h2>
+        <img src="figure4_recovery_by_cause.svg" alt="figure4_recovery_by_cause.svg"/>
+        <div class="caption">QERIS cause-specific resolution: 88% recovery on loss, 98% on MTU fragmentation, and 100% rejection with zero downgrade on security attacks.</div>
+      </div>
+      <div class="card">
+        <h2>Figure5 Confusion Matrix</h2>
+        <img src="figure5_confusion_matrix.svg" alt="figure5_confusion_matrix.svg"/>
+        <div class="caption">S3 failure taxonomy classification matrix against injected ground truth. Confirms high precision and zero cross-contamination of security faults into network retries.</div>
+      </div>
+      <div class="card">
+        <h2>Figure6 Critical Availability</h2>
+        <img src="figure6_critical_availability.svg" alt="figure6_critical_availability.svg"/>
+        <div class="caption">Critical-flow audit: Naive Downgrade-on-Failure achieves availability by committing catastrophic security floor violations; QERIS guarantees strictly 0 violations.</div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

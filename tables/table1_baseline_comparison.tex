@@ -1,0 +1,19 @@
+% Table 1: Comparative Evaluation of QERIS Gateway against Baselines
+\begin{table*}[t]
+\centering
+\caption{Performance, Security Floor Integrity, and Overhead Across All Evaluated Gateway Strategies (Wilson 95\% Confidence Intervals Reported)}
+\label{tab:baseline_comparison}
+\begin{tabular}{lcccccc}
+\hline
+\textbf{Strategy} & \textbf{Cause-Aware} & \textbf{Success Rate (\%)} & \textbf{Floor Violations (\%)} & \textbf{Median Lat. (ms)} & \textbf{IQR (ms)} & \textbf{Bandwidth (B)} \\
+\hline
+Static Classical & No & 38.0 [25.9, 51.8] & 0.0 & 19.3 & 3.2 & 168 \\
+Static Hybrid & No & 40.0 [27.6, 53.8] & 0.0 & 46.0 & 5.7 & 738 \\
+Static PQC & No & 0.0 [0.0, 7.1] & 0.0 & -- & -- & 1820 \\
+Sensitivity-Only & No & 38.0 [25.9, 51.8] & 0.0 & 18.3 & 2.3 & 1054 \\
+Downgrade-on-Failure & No & 40.0 [27.6, 53.8] & \textbf{60.0} & 18.2 & 2.5 & 1380 \\
+Static Retry & No & 40.0 [27.6, 53.8] & 0.0 & 17.8 & 2.0 & 3928 \\
+\textbf{QERIS (Full GW)} & Yes & 60.0 [46.2, 72.4] & 0.0 & 19.5 & 182.1 & 1418 \\
+\hline
+\end{tabular}
+\end{table*}

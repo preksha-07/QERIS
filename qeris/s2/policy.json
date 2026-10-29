@@ -1,0 +1,14 @@
+{
+    "temperature_01": {
+        "sensitivity": "LOW",
+        "minimum_mode": "CLASSICAL",
+        "policy_version": 1,
+        "authority_id": "QERIS-GATEWAY"
+    },
+    "emergency_stop": {
+        "sensitivity": "CRITICAL",
+        "minimum_mode": "HYBRID",
+        "policy_version": 1,
+        "authority_id": "QERIS-GATEWAY"
+    }
+}

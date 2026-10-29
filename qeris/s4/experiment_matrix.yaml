@@ -1,0 +1,192 @@
+# QERIS S4 — Experiment Design Matrix (Task T28)
+# Owner: S4 (Data Science and Evaluation Lead)
+# Frozen: After Week 9 except by team decision (S4 spec §11)
+# Minimum 100 handshakes per cell. State reason explicitly if fewer.
+#
+# Axes:
+#   baseline    × 7 strategies
+#   scenario    × 15 core scenarios
+#   device_class × 3 hardware profiles (calibrated from ESP32)
+#   path_mtu    × 3 levels (1500, 1280, 576)
+#   loss_model  × 4 models (none, uniform 5%, uniform 15%, burst GE)
+#   param_set   ML-KEM-512 (primary), ML-KEM-768 (optional ablation)
+#
+# Run order: randomized per run_id; seed fixed per run and recorded in metadata.
+# Warm-up: 5 discarded warm-up handshakes before each cell (not logged as data).
+
+metadata:
+  schema_version: "1.0"
+  owner: "S4"
+  approved_by: "S3"
+  frozen_after_week: 9
+  min_reps_per_cell: 100
+  exception_rule: "If a scenario is structurally impossible for a device class (e.g. ESP32 cannot do PQC in current build), mark cell EXCLUDED and state reason."
+
+baselines:
+  - id: static_classical
+    description: "Always use CLASSICAL (ECDH) regardless of sensitivity. Reference: unmodified TLS 1.3 without PQC."
+  - id: static_hybrid
+    description: "Always HYBRID (X25519 + ML-KEM-512). No cause-aware recovery."
+  - id: static_pqc
+    description: "Always full PQC (ML-KEM-512 + ML-DSA). No recovery."
+  - id: sensitivity_only
+    description: "Negotiates mode based on sensitivity tier but has no cause-aware failure recovery."
+  - id: downgrade_on_failure
+    description: "Naive industry fallback: drops mode one level on any failure. KNOWN FLOOR VIOLATOR — included to characterize the threat."
+  - id: static_retry_with_floor
+    description: "Blind retry up to max_retries at the same mode. No cause classification."
+  - id: full_gateway
+    description: "QERIS full system: cause-classified, security-floor-bounded recovery (S3 RecoveryController). The research contribution."
+
+device_classes:
+  - id: esp32_constrained
+    description: "ESP32-WROOM-32 (Xtensa LX6 240 MHz, 320 KB SRAM, WiFi). Real device measurements used for calibration."
+    calibration: "S1 T24 real-device timing data used to anchor simulator means."
+    supported_modes: [CLASSICAL, HYBRID]
+    note: "PQC runs on ESP32 EXCLUDED in Week 9+ per cut-list — device cannot complete ML-KEM-512 keygen within handshake timeout. Include calibration timings as threat-to-validity data."
+  - id: edge_gateway
+    description: "Emulated Raspberry Pi 4 class (Cortex-A72, 4 GB LPDDR4). Fully supports all modes."
+    supported_modes: [CLASSICAL, HYBRID, PQC]
+  - id: standard_compute
+    description: "Standard x86 Linux server node. All modes supported with negligible latency."
+    supported_modes: [CLASSICAL, HYBRID, PQC]
+
+scenarios:
+  # --- Normal (fault-free) ---
+  - id: normal_classical
+    cause_injected: none
+    expected_outcome: SUCCESS
+    description: "Baseline healthy handshake at CLASSICAL mode."
+  - id: normal_hybrid
+    cause_injected: none
+    expected_outcome: SUCCESS
+    description: "Healthy handshake at HYBRID mode."
+  - id: normal_pqc
+    cause_injected: none
+    expected_outcome: SUCCESS
+    description: "Healthy PQC handshake. Establishes latency and bandwidth ceiling."
+
+  # --- Network transport faults ---
+  - id: packet_loss_uniform_5pct
+    cause_injected: loss_timeout
+    expected_outcome: RETRY  # or SUCCESS after retry
+    netem: "tc qdisc add dev <if> root netem loss 5%"
+    description: "5% independent uniform packet loss."
+  - id: packet_loss_uniform_15pct
+    cause_injected: loss_timeout
+    expected_outcome: RETRY
+    netem: "tc qdisc add dev <if> root netem loss 15%"
+    description: "15% uniform loss — severe but realistic on constrained IoT links."
+  - id: packet_loss_burst_ge
+    cause_injected: loss_timeout
+    expected_outcome: RETRY
+    netem: "tc qdisc add dev <if> root netem loss gemodel 8% 35% 99% 15%"
+    description: "Gilbert-Elliott burst loss (p=8%, r=35%, 1-h=99%, 1-k=15%)."
+  - id: path_timeout
+    cause_injected: loss_timeout
+    expected_outcome: RETRY
+    netem: "tc qdisc add dev <if> root netem delay 950ms 50ms"
+    description: "Extreme delay (950 ± 50 ms) that exceeds the gateway handshake timeout budget."
+
+  # --- MTU / Fragmentation faults ---
+  - id: reduced_mtu_1280
+    cause_injected: mtu_fragment
+    expected_outcome: RETRY
+    netem: "ip link set dev <if> mtu 1280"
+    description: "IPv6 minimum MTU (1280 B). Hybrid/PQC keys exceed this and fragment."
+  - id: reduced_mtu_576
+    cause_injected: mtu_fragment
+    expected_outcome: RETRY
+    netem: "ip link set dev <if> mtu 576"
+    description: "Dialup-era MTU (576 B). Even CLASSICAL keys fragment. Tests extreme case."
+
+  # --- Security attacks (S3 Invariants must reject all) ---
+  - id: attack_bad_signature
+    cause_injected: security_failure
+    expected_outcome: REJECT
+    description: "Policy envelope with corrupted ML-DSA signature. S3 must reject immediately."
+  - id: attack_replayed_policy
+    cause_injected: security_failure
+    expected_outcome: REJECT
+    description: "Policy version <= previously accepted version. Tests S3 replay protection (T16)."
+  - id: attack_downgrade_attempt
+    cause_injected: security_failure
+    expected_outcome: REJECT
+    description: "Device requests CLASSICAL on CRITICAL flow (floor=PQC). Tests downgrade rejection (T17)."
+  - id: attack_untrusted_authority
+    cause_injected: security_failure
+    expected_outcome: REJECT
+    description: "Policy signed by unknown authority_id (not in TRUSTED_AUTHORITIES). S3 UNKNOWN_AUTHORITY path."
+  - id: attack_fast_forward_version
+    cause_injected: security_failure
+    expected_outcome: REJECT
+    description: "Policy version jump exceeds max_version_jump bound. Tests fast-forward protection (T16)."
+
+  # --- Structural floor check ---
+  - id: floor_unreachable_classical_device
+    cause_injected: none
+    expected_outcome: FLOOR_UNREACHABLE
+    description: "Classical-only device (supported_modes=[CLASSICAL]) requesting a CRITICAL flow (floor=PQC). S3 must return FLOOR_UNREACHABLE, not attempt a retry."
+
+path_mtu_levels:
+  - bytes: 1500
+    label: "Standard Ethernet"
+  - bytes: 1280
+    label: "IPv6 minimum MTU"
+  - bytes: 576
+    label: "Dialup / constrained IoT"
+
+metrics:
+  reliability:
+    - handshake_success_rate       # Wilson 95% CI; ≥100 reps per cell
+    - recovery_success_rate        # per cause class
+    - floor_violation_rate         # target 0% for full_gateway
+    - downgrade_block_rate         # must be 100% for all attack scenarios
+    - replay_rejection_rate        # must be 100%
+    - floor_unreachable_rate       # detection rate for structurally impossible flows
+  latency:
+    - duration_ms_median           # robust, report IQR
+    - duration_ms_iqr
+    - duration_ms_mean             # parametric if distribution justifies
+    - duration_ms_std
+  overhead:
+    - size_bytes_mean              # wire bytes per handshake
+    - fragment_count_mean
+    - retransmissions_mean
+    - cpu_pct_mean
+    - mem_mb_mean
+  classification:
+    - confusion_matrix             # ground truth vs classifier cause_label
+    - per_class_precision          # security_failure, mtu_fragment, loss_timeout, none
+    - per_class_recall
+    - per_class_f1
+    - overall_accuracy
+
+statistics:
+  success_rate: "Wilson score interval (two-tailed 95%). Never use normal approximation for small cells."
+  latency: "Median + IQR primary. Mean + SD reported only when distribution is unimodal without heavy tail."
+  causality: "Causal claims only from controlled ablations (full_gateway vs individual ablated baselines). Not from correlation."
+  confounders:
+    - "Wi-Fi interference on real ESP32 path (not present in emulation)"
+    - "Emulated vs real CPU timing — calibrated but not identical"
+    - "Python liboqs vs C liboqs latency difference"
+    - "Single OS kernel and NIC driver"
+
+threats_to_validity:
+  - "One real device class (ESP32): emulated classes calibrated to it but not identical hardware."
+  - "Controlled testbed network: no real-world multipath, NAT, or heterogeneous routers."
+  - "Single cryptographic library (liboqs 0.16): results may differ across implementations."
+  - "Scale limited: single gateway instance, single cloud endpoint, ≤3 device profiles."
+
+run_procedure:
+  randomize_order: true
+  fixed_seed: 1337
+  warm_up_discarded: 5
+  metadata_per_run:
+    - run_id
+    - created_at_utc
+    - python_version
+    - platform
+    - machine
+    - library_versions
+  raw_log_rule: "Never edit raw logs by hand. All analysis regenerates from data/raw/<run_id>/."
