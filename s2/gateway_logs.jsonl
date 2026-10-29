@@ -1,0 +1,72 @@
+{"timestamp": "2026-10-22T10:05:19.162629", "flow_id": "emergency_stop", "requested_mode": "CLASSICAL", "decision": "REJECT", "reason": "Requested mode is below security floor"}
+{"timestamp": "2026-10-22T10:05:19.165892", "flow_id": "emergency_stop", "requested_mode": "HYBRID", "decision": "ALLOW", "reason": "Policy satisfied"}
+{"timestamp": "2026-10-22T10:05:19.168549", "flow_id": "temperature_01", "requested_mode": "CLASSICAL", "decision": "ALLOW", "reason": "Policy satisfied"}
+{"timestamp": "2026-10-22T10:05:19.172384", "flow_id": "emergency_stop", "requested_mode": "CLASSICAL", "decision": "REJECT", "reason": "Requested mode is below security floor"}
+{"timestamp": "2026-10-22T10:05:19.180524", "flow_id": "emergency_stop", "requested_mode": "HYBRID", "decision": "ALLOW", "reason": "Policy satisfied"}
+{"timestamp": "2026-10-22T10:05:19.183254", "flow_id": "temperature_01", "requested_mode": "CLASSICAL", "decision": "ALLOW", "reason": "Policy satisfied"}
+{"timestamp": "2026-10-22T10:05:19.186299", "flow_id": "temperature_01", "requested_mode": "PQC", "decision": "ALLOW", "reason": "Policy satisfied"}
+{"timestamp": "2026-10-22T10:15:31.363974", "flow_id": "emergency_stop", "requested_mode": "CLASSICAL", "decision": "REJECT", "reason": "Requested mode is below security floor"}
+{"timestamp": "2026-10-22T10:15:31.367051", "flow_id": "emergency_stop", "requested_mode": "HYBRID", "decision": "ALLOW", "reason": "Policy satisfied"}
+{"timestamp": "2026-10-22T10:15:31.369699", "flow_id": "temperature_01", "requested_mode": "CLASSICAL", "decision": "ALLOW", "reason": "Policy satisfied"}
+{"timestamp": "2026-10-22T10:15:31.372696", "flow_id": "emergency_stop", "requested_mode": "CLASSICAL", "decision": "REJECT", "reason": "Requested mode is below security floor"}
+{"timestamp": "2026-10-22T10:15:31.375549", "flow_id": "emergency_stop", "requested_mode": "HYBRID", "decision": "ALLOW", "reason": "Policy satisfied"}
+{"timestamp": "2026-10-22T10:15:31.378296", "flow_id": "temperature_01", "requested_mode": "CLASSICAL", "decision": "ALLOW", "reason": "Policy satisfied"}
+{"timestamp": "2026-10-22T10:15:31.381639", "flow_id": "temperature_01", "requested_mode": "PQC", "decision": "ALLOW", "reason": "Policy satisfied"}
+{"timestamp": "2026-10-22T10:19:05.735953", "flow_id": "emergency_stop", "requested_mode": "CLASSICAL", "decision": "REJECT", "reason": "Requested mode is below security floor"}
+{"timestamp": "2026-10-22T10:19:05.739753", "flow_id": "emergency_stop", "requested_mode": "HYBRID", "decision": "ALLOW", "reason": "Policy and device capability satisfied"}
+{"timestamp": "2026-10-22T10:19:05.742480", "flow_id": "temperature_01", "requested_mode": "CLASSICAL", "decision": "ALLOW", "reason": "Policy and device capability satisfied"}
+{"timestamp": "2026-10-22T10:19:05.745903", "flow_id": "emergency_stop", "requested_mode": "CLASSICAL", "decision": "REJECT", "reason": "Requested mode is below security floor"}
+{"timestamp": "2026-10-22T10:19:05.748508", "flow_id": "emergency_stop", "requested_mode": "HYBRID", "decision": "ALLOW", "reason": "Policy and device capability satisfied"}
+{"timestamp": "2026-10-22T10:19:05.751161", "flow_id": "temperature_01", "requested_mode": "CLASSICAL", "decision": "ALLOW", "reason": "Policy and device capability satisfied"}
+{"timestamp": "2026-10-22T10:19:05.756039", "flow_id": "temperature_01", "requested_mode": "PQC", "decision": "REJECT", "reason": "Device does not support requested mode"}
+{"timestamp": "2026-10-22T10:19:43.711712", "flow_id": "emergency_stop", "requested_mode": "CLASSICAL", "decision": "REJECT", "reason": "Requested mode is below security floor"}
+{"timestamp": "2026-10-22T10:19:43.715345", "flow_id": "emergency_stop", "requested_mode": "HYBRID", "decision": "ALLOW", "reason": "Policy and device capability satisfied"}
+{"timestamp": "2026-10-22T10:19:43.718249", "flow_id": "temperature_01", "requested_mode": "CLASSICAL", "decision": "ALLOW", "reason": "Policy and device capability satisfied"}
+{"timestamp": "2026-10-22T10:19:43.722520", "flow_id": "emergency_stop", "requested_mode": "CLASSICAL", "decision": "REJECT", "reason": "Requested mode is below security floor"}
+{"timestamp": "2026-10-22T10:19:43.725599", "flow_id": "emergency_stop", "requested_mode": "HYBRID", "decision": "ALLOW", "reason": "Policy and device capability satisfied"}
+{"timestamp": "2026-10-22T10:19:43.730097", "flow_id": "temperature_01", "requested_mode": "CLASSICAL", "decision": "ALLOW", "reason": "Policy and device capability satisfied"}
+{"timestamp": "2026-10-22T10:19:43.733078", "flow_id": "temperature_01", "requested_mode": "PQC", "decision": "REJECT", "reason": "Device does not support requested mode"}
+{"timestamp": "2026-10-22T10:23:13.208987", "flow_id": "emergency_stop", "requested_mode": "CLASSICAL", "decision": "REJECT", "reason": "Requested mode is below security floor"}
+{"timestamp": "2026-10-22T10:23:13.212972", "flow_id": "emergency_stop", "requested_mode": "HYBRID", "decision": "ALLOW", "reason": "Policy and device capability satisfied"}
+{"timestamp": "2026-10-22T10:23:13.215575", "flow_id": "temperature_01", "requested_mode": "CLASSICAL", "decision": "ALLOW", "reason": "Policy and device capability satisfied"}
+{"timestamp": "2026-10-22T10:23:13.218922", "flow_id": "emergency_stop", "requested_mode": "CLASSICAL", "decision": "REJECT", "reason": "Requested mode is below security floor"}
+{"timestamp": "2026-10-22T10:23:13.223584", "flow_id": "emergency_stop", "requested_mode": "HYBRID", "decision": "ALLOW", "reason": "Policy and device capability satisfied"}
+{"timestamp": "2026-10-22T10:23:13.226922", "flow_id": "temperature_01", "requested_mode": "CLASSICAL", "decision": "ALLOW", "reason": "Policy and device capability satisfied"}
+{"timestamp": "2026-10-22T10:23:13.229688", "flow_id": "temperature_01", "requested_mode": "PQC", "decision": "REJECT", "reason": "Device does not support requested mode"}
+{"timestamp": "2026-10-22T10:24:25.490555", "flow_id": "emergency_stop", "requested_mode": "CLASSICAL", "decision": "FLOOR_UNREACHABLE", "reason": "Security floor is unreachable for this device"}
+{"timestamp": "2026-10-22T10:24:25.493715", "flow_id": "emergency_stop", "requested_mode": "HYBRID", "decision": "FLOOR_UNREACHABLE", "reason": "Security floor is unreachable for this device"}
+{"timestamp": "2026-10-22T10:24:25.496567", "flow_id": "temperature_01", "requested_mode": "CLASSICAL", "decision": "ALLOW", "reason": "Policy and device capability satisfied"}
+{"timestamp": "2026-10-22T10:24:25.500094", "flow_id": "emergency_stop", "requested_mode": "CLASSICAL", "decision": "FLOOR_UNREACHABLE", "reason": "Security floor is unreachable for this device"}
+{"timestamp": "2026-10-22T10:24:25.503353", "flow_id": "emergency_stop", "requested_mode": "HYBRID", "decision": "FLOOR_UNREACHABLE", "reason": "Security floor is unreachable for this device"}
+{"timestamp": "2026-10-22T10:24:25.509347", "flow_id": "temperature_01", "requested_mode": "CLASSICAL", "decision": "ALLOW", "reason": "Policy and device capability satisfied"}
+{"timestamp": "2026-10-22T10:24:25.512188", "flow_id": "temperature_01", "requested_mode": "PQC", "decision": "REJECT", "reason": "Device does not support requested mode"}
+{"timestamp": "2026-10-22T10:27:11.193959", "device_id": "device_003", "flow_id": "emergency_stop", "requested_mode": "CLASSICAL", "decision": "FLOOR_UNREACHABLE", "reason": "Security floor is unreachable for this device"}
+{"timestamp": "2026-10-22T10:27:11.197094", "device_id": "device_003", "flow_id": "emergency_stop", "requested_mode": "HYBRID", "decision": "FLOOR_UNREACHABLE", "reason": "Security floor is unreachable for this device"}
+{"timestamp": "2026-10-22T10:27:11.199760", "device_id": "device_003", "flow_id": "temperature_01", "requested_mode": "CLASSICAL", "decision": "ALLOW", "reason": "Policy and device capability satisfied"}
+{"timestamp": "2026-10-22T10:27:11.204020", "device_id": "device_003", "flow_id": "emergency_stop", "requested_mode": "CLASSICAL", "decision": "FLOOR_UNREACHABLE", "reason": "Security floor is unreachable for this device"}
+{"timestamp": "2026-10-22T10:27:11.207004", "device_id": "device_003", "flow_id": "emergency_stop", "requested_mode": "HYBRID", "decision": "FLOOR_UNREACHABLE", "reason": "Security floor is unreachable for this device"}
+{"timestamp": "2026-10-22T10:27:11.210739", "device_id": "device_003", "flow_id": "temperature_01", "requested_mode": "CLASSICAL", "decision": "ALLOW", "reason": "Policy and device capability satisfied"}
+{"timestamp": "2026-10-22T10:27:11.213453", "device_id": "device_003", "flow_id": "temperature_01", "requested_mode": "PQC", "decision": "REJECT", "reason": "Device does not support requested mode"}
+{"timestamp": "2026-10-22T10:30:17.042244", "device_id": "device_003", "flow_id": "emergency_stop", "requested_mode": "CLASSICAL", "decision": "FLOOR_UNREACHABLE", "reason": "Security floor is unreachable for this device"}
+{"timestamp": "2026-10-22T10:30:17.045340", "device_id": "device_003", "flow_id": "emergency_stop", "requested_mode": "HYBRID", "decision": "FLOOR_UNREACHABLE", "reason": "Security floor is unreachable for this device"}
+{"timestamp": "2026-10-22T10:30:17.047750", "device_id": "device_003", "flow_id": "temperature_01", "requested_mode": "CLASSICAL", "decision": "ALLOW", "reason": "Policy and device capability satisfied"}
+{"timestamp": "2026-10-22T10:30:17.050916", "device_id": "device_003", "flow_id": "emergency_stop", "requested_mode": "CLASSICAL", "decision": "FLOOR_UNREACHABLE", "reason": "Security floor is unreachable for this device"}
+{"timestamp": "2026-10-22T10:30:17.054965", "device_id": "device_003", "flow_id": "emergency_stop", "requested_mode": "HYBRID", "decision": "FLOOR_UNREACHABLE", "reason": "Security floor is unreachable for this device"}
+{"timestamp": "2026-10-22T10:30:17.058605", "device_id": "device_003", "flow_id": "temperature_01", "requested_mode": "CLASSICAL", "decision": "ALLOW", "reason": "Policy and device capability satisfied"}
+{"timestamp": "2026-10-22T10:30:17.061558", "device_id": "device_003", "flow_id": "temperature_01", "requested_mode": "PQC", "decision": "REJECT", "reason": "Device does not support requested mode"}
+{"timestamp": "2026-10-22T10:31:55.760611", "device_id": "device_003", "flow_id": "emergency_stop", "requested_mode": "CLASSICAL", "decision": "FLOOR_UNREACHABLE", "reason": "Security floor is unreachable for this device"}
+{"timestamp": "2026-10-22T10:31:55.764212", "device_id": "device_003", "flow_id": "emergency_stop", "requested_mode": "HYBRID", "decision": "FLOOR_UNREACHABLE", "reason": "Security floor is unreachable for this device"}
+{"timestamp": "2026-10-22T10:31:55.766942", "device_id": "device_003", "flow_id": "temperature_01", "requested_mode": "CLASSICAL", "decision": "ALLOW", "reason": "Policy and device capability satisfied"}
+{"timestamp": "2026-10-22T10:31:55.770632", "device_id": "device_003", "flow_id": "emergency_stop", "requested_mode": "CLASSICAL", "decision": "FLOOR_UNREACHABLE", "reason": "Security floor is unreachable for this device"}
+{"timestamp": "2026-10-22T10:31:55.773610", "device_id": "device_003", "flow_id": "emergency_stop", "requested_mode": "HYBRID", "decision": "FLOOR_UNREACHABLE", "reason": "Security floor is unreachable for this device"}
+{"timestamp": "2026-10-22T10:31:55.776541", "device_id": "device_003", "flow_id": "temperature_01", "requested_mode": "CLASSICAL", "decision": "ALLOW", "reason": "Policy and device capability satisfied"}
+{"timestamp": "2026-10-22T10:31:55.779588", "device_id": "device_003", "flow_id": "temperature_01", "requested_mode": "PQC", "decision": "REJECT", "reason": "Device does not support requested mode"}
+{"timestamp": "2026-10-26T19:49:53.929756", "device_id": "device_001", "flow_id": "temperature_01", "requested_mode": "CLASSICAL", "decision": "ALLOW", "reason": "Policy and device capability satisfied"}
+{"timestamp": "2026-10-26T19:50:24.519612", "device_id": "device_002", "flow_id": "emergency_stop", "requested_mode": "CLASSICAL", "decision": "REJECT", "reason": "Requested mode is below security floor"}
+{"timestamp": "2026-10-26T19:51:05.582000", "device_id": "device_003", "flow_id": "emergency_stop", "requested_mode": "HYBRID", "decision": "FLOOR_UNREACHABLE", "reason": "Security floor is unreachable for this device"}
+{"timestamp": "2026-10-26T20:39:15.710735", "device_id": "device_003", "flow_id": "temperature_01", "requested_mode": "CLASSICAL", "decision": "ALLOW", "reason": "Policy and device capability satisfied"}
+{"timestamp": "2026-10-26T20:39:35.793161", "device_id": "device_002", "flow_id": "emergency_stop", "requested_mode": "HYBRID", "decision": "ALLOW", "reason": "Policy and device capability satisfied"}
+{"timestamp": "2026-10-26T20:40:11.150735", "device_id": "device_002", "flow_id": "emergency_stop", "requested_mode": "CLASSICAL", "decision": "REJECT", "reason": "Requested mode is below security floor"}
+{"timestamp": "2026-10-26T20:40:39.706297", "device_id": "device_003", "flow_id": "temperature_01", "requested_mode": "PQC", "decision": "REJECT", "reason": "Device does not support requested mode"}
+{"timestamp": "2026-10-26T20:40:54.374106", "device_id": "device_003", "flow_id": "emergency_stop", "requested_mode": "HYBRID", "decision": "FLOOR_UNREACHABLE", "reason": "Security floor is unreachable for this device"}
+{"timestamp": "2026-10-26T20:47:47.241594", "device_id": "device_002", "flow_id": "emergency_stop", "sensitivity": "CRITICAL", "minimum_mode": "HYBRID", "requested_mode": "CLASSICAL", "policy_version": 1, "decision": "REJECT", "reason": "Requested mode is below security floor"}
