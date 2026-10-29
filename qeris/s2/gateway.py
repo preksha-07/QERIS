@@ -249,6 +249,7 @@ def crypto_demo(request: CryptoDemoRequest):
 
         # Decrypt it again for the local round-trip demonstration.
         decrypted = session.decrypt(encrypted)
+        kem_ct = getattr(session, "kem_ciphertext", b"")
 
         return {
             "flow_id": request.flow_id,
@@ -258,6 +259,8 @@ def crypto_demo(request: CryptoDemoRequest):
             "crypto": "ML-KEM + HKDF-SHA256 + AES-256-GCM",
             "decision": "ALLOW",
             "encrypted_message_length": len(encrypted),
+            "ciphertext_hex": encrypted.hex(),
+            "kem_encapsulated_key_hex": kem_ct.hex() if kem_ct else None,
             "decrypted_message": decrypted.decode("utf-8"),
         }
 

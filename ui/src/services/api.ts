@@ -247,29 +247,49 @@ function delay(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+// ─── Crypto Demo (real endpoint) ──────────────────────────────────────────────
+
+export async function runCryptoDemo(
+  deviceId: string,
+  flowId: string,
+  message: string
+): Promise<{ data: any | null; error: string | null }> {
+  try {
+    const res = await fetchWithTimeout(`${API_BASE_URL}/crypto-demo`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        device_id: deviceId,
+        flow_id: flowId,
+        message,
+      }),
+    });
+
+    if (!res.ok) {
+      return { data: null, error: `Crypto endpoint returned ${res.status}` };
+    }
+
+    const data = await res.json();
+    return { data, error: null };
+  } catch {
+    return { data: null, error: 'Crypto endpoint unreachable' };
+  }
+}
+
 // ─── simulateTransmission ─────────────────────────────────────────────────────
-// S4 INTEGRATION POINT:
-//   1. Replace the checkFlow fallback inside this function with the real
-//      POST /check-flow call once the backend is up.
-//   2. If the decision is ALLOW, call POST /crypto-demo (or the S1 device
-//      simulator endpoint) and populate the CryptoResult fields from the
-//      real response. Remove the placeholder crypto stub below.
-//
-// The UI reads TransmissionResult and will automatically display real values
-// when S4 fills them in — no UI changes required.
 
 export async function simulateTransmission(
   request: FlowRequest,
   message: string
-): Promise<{ result: TransmissionResult; mocked: boolean }> {
+): Promise<{ result: TransmissionResult; mocked: boolean; error?: string | null }> {
   // ── 1. Gateway policy check ─────────────────────────────────────────────
-  // Try real backend first; fall back to client-side mock if offline.
-  const { data: realData, error } = await checkFlow(request);
+  const { data: realData, error: checkError } = await checkFlow(request);
 
   let gatewayResponse: FlowResponse;
   let wasMocked: boolean;
+  let requestError: string | null = null;
 
-  if (!error && realData) {
+  if (!checkError && realData) {
     gatewayResponse = realData;
     wasMocked = false;
   } else {
@@ -277,23 +297,48 @@ export async function simulateTransmission(
     const { data: mockData } = checkFlowMock(request);
     gatewayResponse = mockData;
     wasMocked = true;
+    requestError = checkError ?? 'Gateway unreachable';
   }
 
   // ── 2. Crypto / data-path stage ─────────────────────────────────────────
-  // S4: Replace this stub with a real call to POST /crypto-demo or the
-  //     S1 device simulator. The CryptoResult shape matches what the UI needs.
+  // Order: Policy / sensitivity -> Minimum security floor -> Requested mode validation -> Device capability -> ALLOW / REJECT.
+  // Crypto only for an allowed flow. For rejected or floor-unreachable: do NOT perform crypto stage.
   let cryptoResult: CryptoResult | null = null;
 
   if (gatewayResponse.decision === 'ALLOW') {
-    // S4: Make the real API call here and populate cryptoResult from the response.
-    // For now, show a placeholder that makes clear what WILL be here:
-    cryptoResult = {
-      ciphertext_hex: null,        // S4: populate from /crypto-demo response
-      kem_encapsulated_key_hex: null, // S4: populate from /crypto-demo response
-      decrypted_message: null,     // S4: populate from /crypto-demo response
-      algorithm: 'ML-KEM-768 · HKDF-SHA256 · AES-256-GCM', // fixed — S1 suite
-      crypto_status: 'UNAVAILABLE', // S4: set to 'SECURE' when backend connected
-    };
+    if (!wasMocked) {
+      const { data: cryptoData, error: cryptoError } = await runCryptoDemo(
+        request.device_id,
+        request.flow_id,
+        message
+      );
+
+      if (!cryptoError && cryptoData && cryptoData.decision === 'ALLOW') {
+        cryptoResult = {
+          ciphertext_hex: cryptoData.ciphertext_hex ?? null,
+          kem_encapsulated_key_hex: cryptoData.kem_encapsulated_key_hex ?? null,
+          decrypted_message: cryptoData.decrypted_message ?? null,
+          algorithm: cryptoData.crypto ?? 'ML-KEM + HKDF-SHA256 + AES-256-GCM',
+          crypto_status: 'SECURE',
+        };
+      } else {
+        cryptoResult = {
+          ciphertext_hex: null,
+          kem_encapsulated_key_hex: null,
+          decrypted_message: null,
+          algorithm: 'ML-KEM + HKDF-SHA256 + AES-256-GCM',
+          crypto_status: 'UNAVAILABLE',
+        };
+      }
+    } else {
+      cryptoResult = {
+        ciphertext_hex: null,
+        kem_encapsulated_key_hex: null,
+        decrypted_message: null,
+        algorithm: 'ML-KEM + HKDF-SHA256 + AES-256-GCM',
+        crypto_status: 'UNAVAILABLE',
+      };
+    }
   }
 
   return {
@@ -303,5 +348,6 @@ export async function simulateTransmission(
       message,
     },
     mocked: wasMocked,
+    error: requestError,
   };
 }

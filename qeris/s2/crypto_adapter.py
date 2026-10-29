@@ -46,6 +46,7 @@ class CryptoSession:
     policy_version: int
     _encryptor: MessageEncryptor
     _decryptor: MessageDecryptor
+    kem_ciphertext: bytes = b""
 
     def encrypt(self, plaintext: bytes) -> bytes:
         """Encrypt using the session's persistent encryptor."""
@@ -111,4 +112,5 @@ def establish_session(
         policy_version=policy_version,
         _encryptor=encryptor,
         _decryptor=decryptor,
+        kem_ciphertext=ciphertext,
     )

@@ -53,24 +53,22 @@ export const Devices: React.FC = () => {
   // ── Simulation state ─────────────────────────────────────────────────────
   const [simDevice, setSimDevice] = useState<string>(mockDevices[0].device_id);
   const [simFlow, setSimFlow]     = useState<string>(mockPolicies[0].flow_id);
-  const [simMessage, setSimMessage] = useState<string>('Hello, this is temperature data');
+  const [simMessage, setSimMessage] = useState<string>('Temperature = 23.4 C');
   const [simMode, setSimMode]     = useState<SecurityMode>('CLASSICAL');
   const [simLoading, setSimLoading] = useState(false);
   const [simResult, setSimResult]  = useState<TransmissionResult | null>(null);
   const [simMocked, setSimMocked]  = useState(false);
+  const [simError, setSimError]   = useState<string | null>(null);
 
   useEffect(() => {
     getDevices().then(({ data }) => setDevices(data));
   }, []);
 
-  // When device changes, reset mode to the first mode that device supports
+  // When device changes, keep user selection clean without forced resets
   function handleDeviceChange(deviceId: string) {
     setSimDevice(deviceId);
-    const dev = mockDevices.find((d) => d.device_id === deviceId);
-    if (dev && !dev.supported_modes.includes(simMode)) {
-      setSimMode(dev.supported_modes[0]);
-    }
     setSimResult(null);
+    setSimError(null);
   }
 
   // Derive selected device object for live hints
@@ -80,14 +78,18 @@ export const Devices: React.FC = () => {
   async function runSimulation() {
     setSimLoading(true);
     setSimResult(null);
+    setSimError(null);
 
-    const { result, mocked } = await simulateTransmission(
+    const { result, mocked, error } = await simulateTransmission(
       { device_id: simDevice, flow_id: simFlow, requested_mode: simMode },
       simMessage
     );
 
     setSimResult(result);
     setSimMocked(mocked);
+    if (error && mocked) {
+      setSimError(error);
+    }
     setSimLoading(false);
   }
 
@@ -178,7 +180,17 @@ export const Devices: React.FC = () => {
                 <select
                   id="sim-flow"
                   value={simFlow}
-                  onChange={(e) => { setSimFlow(e.target.value); setSimResult(null); }}
+                  onChange={(e) => {
+                    const newFlow = e.target.value;
+                    setSimFlow(newFlow);
+                    setSimResult(null);
+                    setSimError(null);
+                    if (simMessage === 'Temperature = 23.4 C' || simMessage === 'Hello, this is temperature data') {
+                      if (newFlow === 'emergency_stop') setSimMessage('Emergency stop activated');
+                    } else if (simMessage === 'Emergency stop activated') {
+                      if (newFlow === 'temperature_01') setSimMessage('Temperature = 23.4 C');
+                    }
+                  }}
                   style={SELECT_STYLE}
                 >
                   {mockPolicies.map((p) => (
@@ -202,7 +214,7 @@ export const Devices: React.FC = () => {
                 <select
                   id="sim-mode"
                   value={simMode}
-                  onChange={(e) => { setSimMode(e.target.value as SecurityMode); setSimResult(null); }}
+                  onChange={(e) => { setSimMode(e.target.value as SecurityMode); setSimResult(null); setSimError(null); }}
                   style={SELECT_STYLE}
                 >
                   {SECURITY_MODES.map((m) => (
@@ -275,6 +287,22 @@ export const Devices: React.FC = () => {
                   }}
                 />
                 Sending to gateway…
+              </div>
+            )}
+
+            {simError && (
+              <div
+                style={{
+                  background: 'rgba(239, 68, 68, 0.08)',
+                  border: '1px solid rgba(239, 68, 68, 0.25)',
+                  borderRadius: 6,
+                  padding: '10px 14px',
+                  marginBottom: 14,
+                  fontSize: 12,
+                  color: 'var(--red)',
+                }}
+              >
+                {simError}
               </div>
             )}
 
@@ -430,12 +458,12 @@ export const Devices: React.FC = () => {
                           fontSize: 10,
                           padding: '1px 6px',
                           borderRadius: 3,
-                          background: 'rgba(245,158,11,0.12)',
-                          color: 'var(--amber)',
-                          border: '1px solid rgba(245,158,11,0.2)',
+                          background: cr.crypto_status === 'SECURE' ? 'rgba(16, 185, 129, 0.12)' : 'rgba(245,158,11,0.12)',
+                          color: cr.crypto_status === 'SECURE' ? 'var(--green)' : 'var(--amber)',
+                          border: `1px solid ${cr.crypto_status === 'SECURE' ? 'rgba(16, 185, 129, 0.2)' : 'rgba(245,158,11,0.2)'}`,
                         }}
                       >
-                        AWAITING S4
+                        {cr.crypto_status === 'SECURE' ? 'LOCAL ROUND-TRIP' : cr.crypto_status ?? 'DEMO'}
                       </span>
                     )}
                   </div>
@@ -458,28 +486,28 @@ export const Devices: React.FC = () => {
                             color: cr.crypto_status === 'SECURE' ? 'var(--green)' : 'var(--text-muted)',
                           }}
                         >
-                          {cr.crypto_status ?? '—'}
+                          {cr.crypto_status === 'SECURE' ? 'Encryption & Decryption Successful' : cr.crypto_status ?? '—'}
                         </span>
                       </Row>
                       <Row label="Ciphertext">
                         <span style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'monospace' }}>
                           {cr.ciphertext_hex
-                            ? cr.ciphertext_hex.slice(0, 24) + '…'
-                            : 'Pending S4 integration'}
+                            ? `${cr.ciphertext_hex.slice(0, 24)}… (${Math.round(cr.ciphertext_hex.length / 2)} bytes)`
+                            : '—'}
                         </span>
                       </Row>
                       <Row label="KEM Key">
                         <span style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'monospace' }}>
                           {cr.kem_encapsulated_key_hex
-                            ? cr.kem_encapsulated_key_hex.slice(0, 24) + '…'
-                            : 'Pending S4 integration'}
+                            ? `${cr.kem_encapsulated_key_hex.slice(0, 24)}… (${Math.round(cr.kem_encapsulated_key_hex.length / 2)} bytes)`
+                            : '—'}
                         </span>
                       </Row>
                       <Row label="Decrypted Message">
                         <span style={{ fontSize: 11, color: 'var(--text-secondary)', fontStyle: 'italic' }}>
                           {cr.decrypted_message
                             ? `"${cr.decrypted_message}"`
-                            : 'Pending S4 integration'}
+                            : '—'}
                         </span>
                       </Row>
                     </div>
