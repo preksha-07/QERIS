@@ -16,7 +16,7 @@ const SECURITY_MODES: SecurityMode[] = ['CLASSICAL', 'HYBRID', 'PQC'];
 // ─── select style shared across all three dropdowns ──────────────────────────
 const SELECT_STYLE: React.CSSProperties = {
   width: '100%',
-  background: 'var(--surface, var(--bg-card))',
+  background: 'var(--bg-card)',
   border: '1px solid var(--border)',
   borderRadius: 6,
   color: 'var(--text-primary)',
@@ -257,8 +257,8 @@ export const Devices: React.FC = () => {
                 alignItems: 'center',
                 gap: 6,
                 padding: '8px 18px',
-                background: simLoading ? 'var(--bg-card)' : 'var(--accent-cyan)',
-                color: simLoading ? 'var(--text-muted)' : '#000',
+                background: simLoading ? 'var(--border)' : 'var(--accent-cyan)',
+                color: simLoading ? 'var(--text-muted)' : '#fff',
                 border: 'none',
                 borderRadius: 6,
                 fontSize: 13,
@@ -458,7 +458,7 @@ export const Devices: React.FC = () => {
                           fontSize: 10,
                           padding: '1px 6px',
                           borderRadius: 3,
-                          background: cr.crypto_status === 'SECURE' ? 'rgba(16, 185, 129, 0.12)' : 'rgba(245,158,11,0.12)',
+                          background: cr.crypto_status === 'SECURE' ? 'rgba(5, 150, 105, 0.1)' : 'rgba(217, 119, 6, 0.1)',
                           color: cr.crypto_status === 'SECURE' ? 'var(--green)' : 'var(--amber)',
                           border: `1px solid ${cr.crypto_status === 'SECURE' ? 'rgba(16, 185, 129, 0.2)' : 'rgba(245,158,11,0.2)'}`,
                         }}

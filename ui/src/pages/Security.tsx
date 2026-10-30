@@ -16,8 +16,8 @@ export const Security: React.FC = () => {
         {/* Research contribution callout */}
         <div
           style={{
-            background: 'rgba(6, 182, 212, 0.04)',
-            border: '1px solid rgba(6, 182, 212, 0.15)',
+            background: 'rgba(8, 145, 178, 0.06)',
+            border: '1px solid rgba(8, 145, 178, 0.2)',
             borderRadius: 8,
             padding: '14px 18px',
             marginBottom: 20,
@@ -60,9 +60,9 @@ export const Security: React.FC = () => {
                 {[
                   { label: 'Minimum security requirement', color: 'var(--accent-cyan)', bg: 'rgba(6,182,212,0.08)', border: 'rgba(6,182,212,0.2)' },
                   null,
-                  { label: 'Requested security mode', color: 'var(--text-secondary)', bg: 'rgba(255,255,255,0.04)', border: 'var(--border)' },
+                  { label: 'Requested security mode', color: 'var(--text-secondary)', bg: 'var(--bg-base)', border: 'var(--border)' },
                   null,
-                  { label: 'Policy decision', color: 'var(--text-primary)', bg: 'rgba(255,255,255,0.03)', border: 'var(--border-accent)' },
+                  { label: 'Policy decision', color: 'var(--text-primary)', bg: 'var(--bg-base)', border: 'var(--border-accent)' },
                 ].map((item, i) =>
                   item === null ? (
                     <div key={i} style={{ paddingLeft: 16, color: 'var(--text-muted)' }}>

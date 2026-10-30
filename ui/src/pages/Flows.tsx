@@ -149,7 +149,7 @@ export const Flows: React.FC = () => {
                   onChange={(e) => setCustomDeviceId(e.target.value)}
                   style={{
                     width: '100%',
-                    background: 'var(--surface)',
+                    background: 'var(--bg-card)',
                     border: '1px solid var(--border)',
                     borderRadius: 6,
                     color: 'var(--text-primary)',
@@ -180,7 +180,7 @@ export const Flows: React.FC = () => {
                   onChange={(e) => setCustomFlowId(e.target.value)}
                   style={{
                     width: '100%',
-                    background: 'var(--surface)',
+                    background: 'var(--bg-card)',
                     border: '1px solid var(--border)',
                     borderRadius: 6,
                     color: 'var(--text-primary)',
@@ -211,7 +211,7 @@ export const Flows: React.FC = () => {
                   onChange={(e) => setCustomMode(e.target.value as SecurityMode)}
                   style={{
                     width: '100%',
-                    background: 'var(--surface)',
+                    background: 'var(--bg-card)',
                     border: '1px solid var(--border)',
                     borderRadius: 6,
                     color: 'var(--text-primary)',
@@ -237,8 +237,8 @@ export const Flows: React.FC = () => {
                     gap: 6,
                     width: '100%',
                     padding: '7px 14px',
-                    background: customLoading ? 'var(--surface)' : 'var(--accent-cyan)',
-                    color: customLoading ? 'var(--text-muted)' : '#000',
+                    background: customLoading ? 'var(--border)' : 'var(--accent-cyan)',
+                    color: customLoading ? 'var(--text-muted)' : '#fff',
                     border: 'none',
                     borderRadius: 6,
                     fontSize: 13,
