@@ -38,3 +38,9 @@ htmlcov/
 
 # macOS system files
 .DS_Store
+
+# Authority private key material (never commit secret keys)
+qeris/s2/authority_keys/*.key
+# Policy version store (runtime state, generated on startup)
+qeris/s2/policy_version_store.json
+qeris/s2/policy_version_store.sha256

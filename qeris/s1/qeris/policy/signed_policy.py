@@ -1,83 +1,84 @@
 """
 QERIS Signed Policy Module
-Milestone: Demo 1 — Standalone Signed-Policy Proof of Concept
-Author: S1 (Cryptography and Device Engineer)
+Milestone: Complete Backend Integration (S1-S2 Policy Schema Alignment)
+Author: S1 (Cryptography and Device Engineer) & S2 (Gateway Engineer)
 
 ===============================================================================
-SECURITY & SCOPE NOTICES:
-1. DEVICE IDENTITY & AUTHORIZATION DISCLAIMER:
-   Cryptographic signature verification on a policy proves ONLY that the policy
-   was signed by the holder of the issuer private key corresponding to the pinned
-   issuer public key. It does NOT prove device identity, nor does it authorize
-   any individual IoT edge device. Device authentication and credential registry
-   checks are handled separately by the gateway.
-2. EXPIRY & REVOCATION STATUS (UNRESOLVED):
-   The 'expiry' and 'revocation_list' fields are candidate fields inferred from
-   the threat model. Expiry enforcement requires a trusted secure time source
-   (currently unestablished on constrained devices), and revocation semantics
-   require gateway distribution rules (currently unestablished). These checks are
-   flagged as UNRESOLVED and are not claimed to be complete.
-3. ANTI-ROLLBACK & PERSISTENCE:
-   Monotonic version checking is evaluated in-memory against a caller-supplied
-   'last_seen_version'. No persistent storage or storage owner is implemented here;
-   persistent anti-rollback storage design must be coordinated with S2/S3.
+SECURITY & ARCHITECTURAL CONTRACT:
+1. CANONICAL FIVE-FIELD POLICY:
+   The policy format strictly matches S2's five-field schema:
+   - flow_id: str
+   - sensitivity: str ("LOW", "MEDIUM", "HIGH", "CRITICAL")
+   - minimum_mode: str ("CLASSICAL", "HYBRID", "PQC")
+   - policy_version: int (>= 1, strictly not bool)
+   - authority_id: str
+   Provisional candidate fields from Demo 1 (expiry, revocation_list,
+   tier_to_suite, flow_to_tier, sig_alg inside payload) are removed from active
+   validation.
+2. EXPLICIT SIGNATURE ENVELOPE:
+   The policy payload is decoupled from signature metadata. An envelope contains:
+   - policy: The canonical 5-field mapping.
+   - sig_alg: Cryptographic algorithm identifier (ML-DSA-65).
+   - signature: Cryptographic signature bytes (or hex string).
+3. TRUSTED AUTHORITY RESOLUTION:
+   authority_id is verified against a trusted public-key registry. Unregistered
+   or untrusted authorities are rejected with UNTRUSTED_AUTHORITY.
+   Public keys supplied inside unverified policies are NEVER trusted.
 4. AUTHENTICATION BEFORE ANTI-ROLLBACK:
-   Cryptographic signature verification is strictly performed BEFORE any
-   anti-rollback decision based on the policy version. An unauthenticated or
-   forged policy is rejected with INVALID_SIGNATURE and is never evaluated or
-   logged as an authentic stale policy.
+   Cryptographic signature verification strictly occurs BEFORE checking policy
+   version anti-rollback. An invalid signature returns INVALID_SIGNATURE.
 5. CONFIDENTIALITY:
-   This module never logs or prints private keys, secret signer material, or
-   cryptographic secrets.
+   Private keys and secret signer material are never logged, printed, or leaked.
 ===============================================================================
 """
 
 from collections.abc import Container, Mapping
 from dataclasses import dataclass
 from enum import Enum
-import math
-from typing import Any
+from typing import Any, Optional
 import oqs
 
 from .serialization import (
-    PROVISIONAL_CANDIDATE_FIELDS,
+    CANONICAL_POLICY_FIELDS,
+    deserialize_envelope_from_bytes,
     deserialize_policy_from_bytes,
+    serialize_envelope_to_bytes,
     serialize_policy_to_bytes,
 )
 
-# Standard approved algorithm name for QERIS Demo 1 policy signing
+# Standard approved algorithm name for QERIS policy signing
 DEFAULT_SIG_ALG: str = "ML-DSA-65"
 DEFAULT_ALLOWED_ALGORITHMS: tuple[str, ...] = ("ML-DSA-65",)
 
-# Maximum safe 64-bit signed integer timestamp (protects against OverflowError and unreasonable ranges)
-MAX_EXPIRY_TIMESTAMP: int = (1 << 63) - 1
-
 PERMITTED_ALLOWED_ALGORITHMS_TYPES: tuple[type, ...] = (tuple, list, set, frozenset)
+
+VALID_SENSITIVITIES: frozenset[str] = frozenset({"LOW", "MEDIUM", "HIGH", "CRITICAL"})
+VALID_MODES: frozenset[str] = frozenset({"CLASSICAL", "HYBRID", "PQC", "PQ"})
 
 
 class PolicyValidationError(ValueError):
-    """Raised when policy structure or fields fail provisional validation."""
+    """Raised when policy structure or fields fail validation."""
     pass
 
 
 class PolicyVerificationStatus(str, Enum):
-    """Explicit verification status codes."""
+    """Explicit policy verification status codes."""
     VALID = "VALID"
     INVALID_STRUCTURE = "INVALID_STRUCTURE"
     WRONG_ALGORITHM = "WRONG_ALGORITHM"
     UNSUPPORTED_ALGORITHM = "UNSUPPORTED_ALGORITHM"
     STALE_POLICY = "STALE_POLICY"
     INVALID_SIGNATURE = "INVALID_SIGNATURE"
+    UNTRUSTED_AUTHORITY = "UNTRUSTED_AUTHORITY"
 
 
 @dataclass(frozen=True)
 class PolicyVerificationResult:
-    """
-    Structured result returned by policy verification.
+    """Structured result returned by policy verification.
 
-    - is_valid: True only if structure, algorithm, signature, and monotonic version all pass.
-    - status: Specific PolicyVerificationStatus code for granular policy decisions.
-    - message: Descriptive technical summary (suitable for logging/viva explanation).
+    - is_valid: True only if structure, authority, algorithm, signature, and monotonic version pass.
+    - status: Specific PolicyVerificationStatus code.
+    - message: Descriptive technical summary.
     """
     is_valid: bool
     status: PolicyVerificationStatus
@@ -85,6 +86,40 @@ class PolicyVerificationResult:
 
     def __bool__(self) -> bool:
         return self.is_valid
+
+
+@dataclass(frozen=True)
+class SignedPolicyEnvelope:
+    """Explicit envelope decoupling the 5-field policy from signature metadata."""
+    policy: dict[str, Any]
+    sig_alg: str = DEFAULT_SIG_ALG
+    signature: bytes = b""
+
+    def to_dict(self) -> dict[str, Any]:
+        """Convert envelope to JSON-serializable dictionary with hex signature."""
+        return {
+            "policy": dict(self.policy),
+            "sig_alg": self.sig_alg,
+            "signature": self.signature.hex() if isinstance(self.signature, (bytes, bytearray)) else str(self.signature),
+        }
+
+    @classmethod
+    def from_dict(cls, data: Mapping[str, Any]) -> "SignedPolicyEnvelope":
+        """Instantiate envelope from a dictionary."""
+        if not isinstance(data, Mapping):
+            raise TypeError(f"Envelope data must be a Mapping, got {type(data).__name__}")
+        if "policy" not in data or "signature" not in data:
+            raise ValueError("Envelope must contain 'policy' and 'signature' fields.")
+        policy = dict(data["policy"])
+        sig_alg = str(data.get("sig_alg", DEFAULT_SIG_ALG))
+        raw_sig = data["signature"]
+        if isinstance(raw_sig, str):
+            sig_bytes = bytes.fromhex(raw_sig)
+        elif isinstance(raw_sig, (bytes, bytearray)):
+            sig_bytes = bytes(raw_sig)
+        else:
+            raise TypeError(f"Signature must be hex string or bytes, got {type(raw_sig).__name__}")
+        return cls(policy=policy, sig_alg=sig_alg, signature=sig_bytes)
 
 
 def _is_safe_utf8_string(val: str) -> bool:
@@ -97,28 +132,10 @@ def _is_safe_utf8_string(val: str) -> bool:
 
 
 def validate_allowed_algorithms(allowed_algorithms: Any) -> frozenset[str]:
-    """
-    Validates and normalizes the verifier's allowed_algorithms configuration.
-
-    Accepted input types:
-        - None: defaults to DEFAULT_ALLOWED_ALGORITHMS.
-        - tuple, list, set, frozenset containing non-empty, non-whitespace strings.
-
-    Rejected:
-        - str, bytes, bytearray (rejects string-as-container vulnerabilities).
-        - Non-iterables or collections containing non-string or empty elements.
-
-    Returns:
-        frozenset[str]: Normalized set of permitted algorithm identifiers.
-
-    Raises:
-        TypeError: If allowed_algorithms is not a permitted collection type or contains non-string items.
-        ValueError: If any algorithm name is empty or whitespace-only.
-    """
+    """Validates and normalizes the verifier's allowed_algorithms configuration."""
     if allowed_algorithms is None:
         return frozenset(DEFAULT_ALLOWED_ALGORITHMS)
 
-    # Strictly reject str, bytes, bytearray to prevent accidental substring matching
     if isinstance(allowed_algorithms, (str, bytes, bytearray)):
         raise TypeError(
             f"allowed_algorithms must be a tuple, list, set, or frozenset, not {type(allowed_algorithms).__name__}"
@@ -148,16 +165,14 @@ def validate_policy_structure(
     policy: Mapping[str, Any],
     raise_exception: bool = False,
 ) -> tuple[PolicyVerificationStatus, str]:
-    """
-    Validates structural integrity and presence of provisional candidate fields.
+    """Validates structural integrity and presence of canonical 5-field schema.
 
-    Documented provisional schema rules:
-    - version: Positive integer (>= 1, strictly not boolean).
-    - sig_alg: Non-empty string without unpaired surrogates.
-    - flow_to_tier: Dict mapping string flow identifiers to string tiers.
-    - tier_to_suite: Dict mapping string tiers to string cryptographic suites.
-    - expiry: Safe numeric timestamp (int or float, not boolean, not NaN/Inf, 0 <= expiry <= 2^63 - 1).
-    - revocation_list: List of revoked device/credential ID strings.
+    Canonical Schema Fields:
+    - flow_id: non-empty string.
+    - sensitivity: string in {"LOW", "MEDIUM", "HIGH", "CRITICAL"}.
+    - minimum_mode: string in {"CLASSICAL", "HYBRID", "PQC", "PQ"}.
+    - policy_version: integer >= 1 (strictly not bool).
+    - authority_id: non-empty string.
     """
     if not isinstance(policy, Mapping):
         msg = f"Policy input must be a dictionary or mapping, got {type(policy).__name__}"
@@ -165,112 +180,91 @@ def validate_policy_structure(
             raise PolicyValidationError(msg)
         return PolicyVerificationStatus.INVALID_STRUCTURE, msg
 
-    # Verify all candidate fields are present in the provisional test schema
-    for field in PROVISIONAL_CANDIDATE_FIELDS:
+    # Reject missing canonical fields
+    for field in CANONICAL_POLICY_FIELDS:
         if field not in policy:
-            msg = f"Missing required provisional policy field: '{field}'"
+            msg = f"Missing required canonical policy field: '{field}'"
             if raise_exception:
                 raise PolicyValidationError(msg)
             return PolicyVerificationStatus.INVALID_STRUCTURE, msg
 
-    # Field-specific structural and type assertions
-    version = policy["version"]
-    if type(version) is not int or version < 1:
-        msg = f"Field 'version' must be an integer >= 1, got {version!r} (type {type(version).__name__})"
+    # Reject unknown extra fields in canonical policy
+    extra_fields = set(policy.keys()) - set(CANONICAL_POLICY_FIELDS)
+    if extra_fields:
+        msg = f"Unexpected non-canonical fields in policy: {sorted(extra_fields)}"
         if raise_exception:
             raise PolicyValidationError(msg)
         return PolicyVerificationStatus.INVALID_STRUCTURE, msg
 
-    sig_alg = policy["sig_alg"]
-    if not isinstance(sig_alg, str) or not sig_alg.strip():
-        msg = f"Field 'sig_alg' must be a non-empty string, got {sig_alg!r}"
+    # 1. flow_id
+    flow_id = policy["flow_id"]
+    if not isinstance(flow_id, str) or not flow_id.strip():
+        msg = f"Field 'flow_id' must be a non-empty string, got {flow_id!r}"
+        if raise_exception:
+            raise PolicyValidationError(msg)
+        return PolicyVerificationStatus.INVALID_STRUCTURE, msg
+    if not _is_safe_utf8_string(flow_id):
+        msg = f"Field 'flow_id' contains invalid Unicode surrogates: {flow_id!r}"
         if raise_exception:
             raise PolicyValidationError(msg)
         return PolicyVerificationStatus.INVALID_STRUCTURE, msg
 
-    if not _is_safe_utf8_string(sig_alg):
-        msg = f"Field 'sig_alg' contains invalid Unicode surrogates: {sig_alg!r}"
+    # 2. sensitivity
+    sensitivity = policy["sensitivity"]
+    if not isinstance(sensitivity, str) or not sensitivity.strip():
+        msg = f"Field 'sensitivity' must be a non-empty string, got {sensitivity!r}"
+        if raise_exception:
+            raise PolicyValidationError(msg)
+        return PolicyVerificationStatus.INVALID_STRUCTURE, msg
+    if sensitivity.upper() not in VALID_SENSITIVITIES:
+        msg = f"Field 'sensitivity' must be one of {sorted(VALID_SENSITIVITIES)}, got {sensitivity!r}"
+        if raise_exception:
+            raise PolicyValidationError(msg)
+        return PolicyVerificationStatus.INVALID_STRUCTURE, msg
+    if not _is_safe_utf8_string(sensitivity):
+        msg = f"Field 'sensitivity' contains invalid Unicode surrogates: {sensitivity!r}"
         if raise_exception:
             raise PolicyValidationError(msg)
         return PolicyVerificationStatus.INVALID_STRUCTURE, msg
 
-    flow_to_tier = policy["flow_to_tier"]
-    if not isinstance(flow_to_tier, dict):
-        msg = f"Field 'flow_to_tier' must be a dict, got {type(flow_to_tier).__name__}"
+    # 3. minimum_mode
+    minimum_mode = policy["minimum_mode"]
+    if not isinstance(minimum_mode, str) or not minimum_mode.strip():
+        msg = f"Field 'minimum_mode' must be a non-empty string, got {minimum_mode!r}"
+        if raise_exception:
+            raise PolicyValidationError(msg)
+        return PolicyVerificationStatus.INVALID_STRUCTURE, msg
+    if minimum_mode.upper() not in VALID_MODES:
+        msg = f"Field 'minimum_mode' must be one of {sorted(VALID_MODES)}, got {minimum_mode!r}"
+        if raise_exception:
+            raise PolicyValidationError(msg)
+        return PolicyVerificationStatus.INVALID_STRUCTURE, msg
+    if not _is_safe_utf8_string(minimum_mode):
+        msg = f"Field 'minimum_mode' contains invalid Unicode surrogates: {minimum_mode!r}"
         if raise_exception:
             raise PolicyValidationError(msg)
         return PolicyVerificationStatus.INVALID_STRUCTURE, msg
 
-    for k, v in flow_to_tier.items():
-        if not isinstance(k, str) or not isinstance(v, str):
-            msg = f"Field 'flow_to_tier' must contain string keys and values, got ({k!r}: {v!r})"
-            if raise_exception:
-                raise PolicyValidationError(msg)
-            return PolicyVerificationStatus.INVALID_STRUCTURE, msg
-        if not _is_safe_utf8_string(k) or not _is_safe_utf8_string(v):
-            msg = f"Field 'flow_to_tier' contains invalid Unicode surrogates in ({k!r}: {v!r})"
-            if raise_exception:
-                raise PolicyValidationError(msg)
-            return PolicyVerificationStatus.INVALID_STRUCTURE, msg
-
-    tier_to_suite = policy["tier_to_suite"]
-    if not isinstance(tier_to_suite, dict):
-        msg = f"Field 'tier_to_suite' must be a dict, got {type(tier_to_suite).__name__}"
+    # 4. policy_version
+    policy_version = policy["policy_version"]
+    if type(policy_version) is not int or isinstance(policy_version, bool) or policy_version < 1:
+        msg = f"Field 'policy_version' must be an integer >= 1, got {policy_version!r} (type {type(policy_version).__name__})"
         if raise_exception:
             raise PolicyValidationError(msg)
         return PolicyVerificationStatus.INVALID_STRUCTURE, msg
 
-    for k, v in tier_to_suite.items():
-        if not isinstance(k, str) or not isinstance(v, str):
-            msg = f"Field 'tier_to_suite' must contain string keys and values, got ({k!r}: {v!r})"
-            if raise_exception:
-                raise PolicyValidationError(msg)
-            return PolicyVerificationStatus.INVALID_STRUCTURE, msg
-        if not _is_safe_utf8_string(k) or not _is_safe_utf8_string(v):
-            msg = f"Field 'tier_to_suite' contains invalid Unicode surrogates in ({k!r}: {v!r})"
-            if raise_exception:
-                raise PolicyValidationError(msg)
-            return PolicyVerificationStatus.INVALID_STRUCTURE, msg
-
-    expiry = policy["expiry"]
-    if type(expiry) not in (int, float) or isinstance(expiry, bool):
-        msg = f"Field 'expiry' must be a numeric timestamp, got {expiry!r} (type {type(expiry).__name__})"
+    # 5. authority_id
+    authority_id = policy["authority_id"]
+    if not isinstance(authority_id, str) or not authority_id.strip():
+        msg = f"Field 'authority_id' must be a non-empty string, got {authority_id!r}"
         if raise_exception:
             raise PolicyValidationError(msg)
         return PolicyVerificationStatus.INVALID_STRUCTURE, msg
-
-    # Safe timestamp validation: prevents OverflowError on huge integers
-    if isinstance(expiry, float):
-        if math.isnan(expiry) or math.isinf(expiry) or expiry < 0 or expiry > MAX_EXPIRY_TIMESTAMP:
-            msg = f"Field 'expiry' must be a finite, non-negative timestamp <= {MAX_EXPIRY_TIMESTAMP}, got {expiry!r}"
-            if raise_exception:
-                raise PolicyValidationError(msg)
-            return PolicyVerificationStatus.INVALID_STRUCTURE, msg
-    else:  # int: compared directly without float conversion to avoid OverflowError
-        if expiry < 0 or expiry > MAX_EXPIRY_TIMESTAMP:
-            msg = f"Field 'expiry' integer timestamp out of range (0 to {MAX_EXPIRY_TIMESTAMP}), got {expiry!r}"
-            if raise_exception:
-                raise PolicyValidationError(msg)
-            return PolicyVerificationStatus.INVALID_STRUCTURE, msg
-
-    revocation_list = policy["revocation_list"]
-    if not isinstance(revocation_list, list):
-        msg = f"Field 'revocation_list' must be a list, got {type(revocation_list).__name__}"
+    if not _is_safe_utf8_string(authority_id):
+        msg = f"Field 'authority_id' contains invalid Unicode surrogates: {authority_id!r}"
         if raise_exception:
             raise PolicyValidationError(msg)
         return PolicyVerificationStatus.INVALID_STRUCTURE, msg
-
-    for item in revocation_list:
-        if not isinstance(item, str):
-            msg = f"Field 'revocation_list' must contain only string IDs, got item {item!r} ({type(item).__name__})"
-            if raise_exception:
-                raise PolicyValidationError(msg)
-            return PolicyVerificationStatus.INVALID_STRUCTURE, msg
-        if not _is_safe_utf8_string(item):
-            msg = f"Field 'revocation_list' contains invalid Unicode surrogates in item {item!r}"
-            if raise_exception:
-                raise PolicyValidationError(msg)
-            return PolicyVerificationStatus.INVALID_STRUCTURE, msg
 
     return PolicyVerificationStatus.VALID, "Policy structure is valid."
 
@@ -280,32 +274,19 @@ def sign_policy(
     signer: oqs.Signature | bytes,
     sig_alg: str = DEFAULT_SIG_ALG,
 ) -> tuple[bytes, bytes]:
-    """
-    Serializes policy data and signs it using ML-DSA-65 (or specified algorithm).
+    """Serializes canonical 5-field policy data and signs it using ML-DSA-65.
 
     Args:
-        policy_data: Policy mapping containing all required fields including 'sig_alg'.
+        policy_data: 5-field canonical policy mapping.
         signer: Active oqs.Signature object with private key loaded, or raw private key bytes.
         sig_alg: Cryptographic signature algorithm name (default: 'ML-DSA-65').
 
     Returns:
         tuple (signed_bytes, signature):
-            signed_bytes: The deterministic serialized UTF-8 bytes covered by the signature.
-            signature: The raw cryptographic signature bytes.
-
-    Security Notes:
-        - 'sig_alg' is explicitly covered in the signed data to prevent algorithm confusion.
-        - Private keys are never logged, printed, or leaked.
-        - Any ephemeral oqs.Signature object created from raw secret key bytes is freed in finally.
+            signed_bytes: Deterministic serialized UTF-8 bytes covered by the signature.
+            signature: Raw cryptographic signature bytes.
     """
-    # Structural check before signing
     validate_policy_structure(policy_data, raise_exception=True)
-
-    if policy_data.get("sig_alg") != sig_alg:
-        raise ValueError(
-            f"Policy sig_alg '{policy_data.get('sig_alg')}' does not match signer algorithm '{sig_alg}'"
-        )
-
     signed_bytes = serialize_policy_to_bytes(policy_data)
 
     if isinstance(signer, oqs.Signature):
@@ -324,50 +305,42 @@ def sign_policy(
         raise TypeError(f"Signer must be an oqs.Signature or raw secret key bytes, got {type(signer).__name__}")
 
 
+def create_signed_envelope(
+    policy_data: Mapping[str, Any],
+    signer: oqs.Signature | bytes,
+    sig_alg: str = DEFAULT_SIG_ALG,
+) -> dict[str, Any]:
+    """Creates a signed policy envelope containing the 5-field policy, sig_alg, and hex signature."""
+    _, signature = sign_policy(policy_data, signer, sig_alg=sig_alg)
+    return SignedPolicyEnvelope(
+        policy=dict(policy_data),
+        sig_alg=sig_alg,
+        signature=signature,
+    ).to_dict()
+
+
 def verify_policy(
-    policy_input: Mapping[str, Any] | bytes,
-    signature: bytes,
-    issuer_public_key: bytes,
+    policy_input: Mapping[str, Any] | bytes | SignedPolicyEnvelope,
+    signature: Optional[bytes] = None,
+    issuer_public_key: Optional[bytes] = None,
+    authority_registry: Optional[Mapping[str, bytes]] = None,
     allowed_algorithms: Container[str] | None = None,
     last_seen_version: int | None = None,
     allow_equal_version: bool = True,
+    sig_alg: str = DEFAULT_SIG_ALG,
 ) -> PolicyVerificationResult:
-    """
-    Verifies the structure, algorithm, signature, and monotonic version of a policy.
+    """Verifies the structure, trusted authority, algorithm, signature, and monotonic version of a policy.
 
     Order of Operations (Authentication Before Anti-Rollback):
-    1. Caller parameter validation (allowed_algorithms, last_seen_version, allow_equal_version).
-    2. Input ingestion and strict JSON parsing.
-    3. Structural and field type validation.
-    4. Algorithm allowlisting (rejected before crypto operations if disallowed).
-    5. Cryptographic signature verification (proves authentic issuer origin).
-    6. Monotonic anti-rollback check (evaluated strictly on authenticated policies).
-
-    Documented Version Rules:
-    - Evaluated ONLY after signature verification succeeds.
-    - If policy.version < last_seen_version: Rejected with STALE_POLICY (anti-rollback).
-    - If policy.version == last_seen_version:
-        * If allow_equal_version is True (default): Permitted (idempotent policy re-broadcast).
-        * If allow_equal_version is False: Rejected with STALE_POLICY (strictly monotonic).
-    - If policy.version > last_seen_version: Accepted as a valid version increment.
-
-    Documented Algorithm Rules:
-    - The 'sig_alg' specified in the policy MUST be in allowed_algorithms.
-    - If 'sig_alg' is not allowed, returns WRONG_ALGORITHM BEFORE cryptographic verification.
-    - If 'sig_alg' is allowed but not supported by liboqs, returns UNSUPPORTED_ALGORITHM.
-
-    Args:
-        policy_input: Either the policy dictionary or the serialized canonical policy bytes.
-        signature: Raw cryptographic signature bytes.
-        issuer_public_key: Pinned issuer public key bytes.
-        allowed_algorithms: Permitted algorithms (tuple, list, set, frozenset, or None).
-        last_seen_version: Previously observed active policy version (must be int >= 0 or None).
-        allow_equal_version: Whether re-announcing the same version is allowed (default: True).
-
-    Returns:
-        PolicyVerificationResult containing is_valid, status, and descriptive message.
+    1. Caller parameter validation.
+    2. Input ingestion and extraction of envelope if provided.
+    3. Structural and field type validation on canonical 5 fields.
+    4. Authority resolution via authority_registry (or issuer_public_key).
+    5. Algorithm allowlisting (rejected before crypto operations if disallowed).
+    6. Cryptographic signature verification with ML-DSA-65.
+    7. Monotonic anti-rollback check (evaluated strictly on authenticated policies).
     """
-    # 1. Validate caller-supplied verification parameters
+    # 1. Parameter validation
     normalized_allowed = validate_allowed_algorithms(allowed_algorithms)
 
     if last_seen_version is not None:
@@ -379,114 +352,211 @@ def verify_policy(
     if not isinstance(allow_equal_version, bool):
         raise TypeError(f"allow_equal_version must be a bool, got {type(allow_equal_version).__name__}")
 
-    if not isinstance(issuer_public_key, (bytes, bytearray)):
-        return PolicyVerificationResult(
-            is_valid=False,
-            status=PolicyVerificationStatus.INVALID_STRUCTURE,
-            message=f"issuer_public_key must be bytes or bytearray, got {type(issuer_public_key).__name__}",
-        )
+    # 2. Extract policy, sig_alg, signature from input
+    effective_sig_alg = sig_alg
+    effective_sig = signature
 
-    if not isinstance(signature, (bytes, bytearray)):
-        return PolicyVerificationResult(
-            is_valid=False,
-            status=PolicyVerificationStatus.INVALID_STRUCTURE,
-            message=f"signature must be bytes or bytearray, got {type(signature).__name__}",
-        )
-
-    # 2. Structural Ingestion & Parsing
-    if isinstance(policy_input, (bytes, bytearray)):
-        raw_bytes = bytes(policy_input)
-        try:
-            policy_dict = deserialize_policy_from_bytes(raw_bytes)
-        except Exception as exc:
-            return PolicyVerificationResult(
-                is_valid=False,
-                status=PolicyVerificationStatus.INVALID_STRUCTURE,
-                message=f"Failed to parse policy bytes: {exc}",
-            )
-    elif isinstance(policy_input, Mapping):
-        policy_dict = dict(policy_input)
+    if isinstance(policy_input, SignedPolicyEnvelope):
+        policy_dict = dict(policy_input.policy)
+        effective_sig = policy_input.signature
+        effective_sig_alg = policy_input.sig_alg
         try:
             raw_bytes = serialize_policy_to_bytes(policy_dict)
         except Exception as exc:
-            return PolicyVerificationResult(
-                is_valid=False,
-                status=PolicyVerificationStatus.INVALID_STRUCTURE,
-                message=f"Failed to serialize policy mapping: {exc}",
-            )
+            return PolicyVerificationResult(False, PolicyVerificationStatus.INVALID_STRUCTURE, str(exc))
+
+    elif isinstance(policy_input, Mapping):
+        # Check if this mapping is an envelope (has "policy" and "signature")
+        if "policy" in policy_input and "signature" in policy_input:
+            env = dict(policy_input)
+            inner_policy = env["policy"]
+            if not isinstance(inner_policy, Mapping):
+                return PolicyVerificationResult(
+                    False, PolicyVerificationStatus.INVALID_STRUCTURE, "'policy' in envelope must be a mapping"
+                )
+            policy_dict = dict(inner_policy)
+            effective_sig_alg = str(env.get("sig_alg", sig_alg))
+            raw_sig = env["signature"]
+            if isinstance(raw_sig, str):
+                try:
+                    effective_sig = bytes.fromhex(raw_sig)
+                except ValueError:
+                    return PolicyVerificationResult(
+                        False, PolicyVerificationStatus.INVALID_SIGNATURE, "Invalid hex signature in envelope"
+                    )
+            elif isinstance(raw_sig, (bytes, bytearray)):
+                effective_sig = bytes(raw_sig)
+            else:
+                return PolicyVerificationResult(
+                    False, PolicyVerificationStatus.INVALID_STRUCTURE, "Signature in envelope must be hex or bytes"
+                )
+            try:
+                raw_bytes = serialize_policy_to_bytes(policy_dict)
+            except Exception as exc:
+                return PolicyVerificationResult(False, PolicyVerificationStatus.INVALID_STRUCTURE, str(exc))
+        else:
+            policy_dict = dict(policy_input)
+            try:
+                raw_bytes = serialize_policy_to_bytes(policy_dict)
+            except Exception as exc:
+                return PolicyVerificationResult(False, PolicyVerificationStatus.INVALID_STRUCTURE, str(exc))
+
+    elif isinstance(policy_input, (bytes, bytearray)):
+        raw_bytes_in = bytes(policy_input)
+        try:
+            parsed = deserialize_policy_from_bytes(raw_bytes_in)
+        except Exception as exc:
+            return PolicyVerificationResult(False, PolicyVerificationStatus.INVALID_STRUCTURE, str(exc))
+
+        # Check if deserialized JSON is an envelope
+        if "policy" in parsed and "signature" in parsed:
+            inner_policy = parsed["policy"]
+            if not isinstance(inner_policy, Mapping):
+                return PolicyVerificationResult(
+                    False, PolicyVerificationStatus.INVALID_STRUCTURE, "'policy' in envelope must be a mapping"
+                )
+            policy_dict = dict(inner_policy)
+            effective_sig_alg = str(parsed.get("sig_alg", sig_alg))
+            raw_sig = parsed["signature"]
+            if isinstance(raw_sig, str):
+                try:
+                    effective_sig = bytes.fromhex(raw_sig)
+                except ValueError:
+                    return PolicyVerificationResult(
+                        False, PolicyVerificationStatus.INVALID_SIGNATURE, "Invalid hex signature in envelope"
+                    )
+            elif isinstance(raw_sig, (bytes, bytearray)):
+                effective_sig = bytes(raw_sig)
+            try:
+                raw_bytes = serialize_policy_to_bytes(policy_dict)
+            except Exception as exc:
+                return PolicyVerificationResult(False, PolicyVerificationStatus.INVALID_STRUCTURE, str(exc))
+        else:
+            policy_dict = parsed
+            raw_bytes = raw_bytes_in
     else:
         return PolicyVerificationResult(
-            is_valid=False,
-            status=PolicyVerificationStatus.INVALID_STRUCTURE,
-            message=f"Unsupported policy input type: {type(policy_input).__name__}",
+            False, PolicyVerificationStatus.INVALID_STRUCTURE, f"Unsupported policy input type: {type(policy_input).__name__}"
         )
 
-    # 3. Structural & Field Validation
+    # 3. Structural validation on canonical 5 fields
     struct_status, struct_msg = validate_policy_structure(policy_dict, raise_exception=False)
     if struct_status != PolicyVerificationStatus.VALID:
+        return PolicyVerificationResult(False, struct_status, struct_msg)
+
+    # Validate signature bytes presence
+    if not isinstance(effective_sig, (bytes, bytearray)):
         return PolicyVerificationResult(
-            is_valid=False,
-            status=struct_status,
-            message=struct_msg,
+            False, PolicyVerificationStatus.INVALID_SIGNATURE, "Signature must be provided as bytes or bytearray"
+        )
+    effective_sig = bytes(effective_sig)
+    if not effective_sig:
+        return PolicyVerificationResult(
+            False, PolicyVerificationStatus.INVALID_SIGNATURE, "Signature cannot be empty"
         )
 
-    # 4. Algorithm Validation (Checked strictly BEFORE cryptographic operations)
-    sig_alg = policy_dict["sig_alg"]
-    if sig_alg not in normalized_allowed:
+    # 4. Resolve authority public key
+    resolved_public_key = issuer_public_key
+    authority_id = policy_dict["authority_id"]
+
+    if authority_registry is not None:
+        if authority_id not in authority_registry:
+            return PolicyVerificationResult(
+                False,
+                PolicyVerificationStatus.UNTRUSTED_AUTHORITY,
+                f"Authority '{authority_id}' is not in trusted authority registry",
+            )
+        resolved_public_key = authority_registry[authority_id]
+
+    if resolved_public_key is None or not isinstance(resolved_public_key, (bytes, bytearray)):
         return PolicyVerificationResult(
-            is_valid=False,
-            status=PolicyVerificationStatus.WRONG_ALGORITHM,
-            message=f"Algorithm '{sig_alg}' is not in configured allowed algorithms: {sorted(normalized_allowed)}",
+            False,
+            PolicyVerificationStatus.UNTRUSTED_AUTHORITY,
+            f"No valid public key available for authority '{authority_id}'",
+        )
+    resolved_public_key = bytes(resolved_public_key)
+    if not resolved_public_key:
+        return PolicyVerificationResult(
+            False,
+            PolicyVerificationStatus.INVALID_SIGNATURE,
+            "Issuer public key cannot be empty",
+        )
+
+    # 5. Algorithm validation
+    if effective_sig_alg not in normalized_allowed:
+        return PolicyVerificationResult(
+            False,
+            PolicyVerificationStatus.WRONG_ALGORITHM,
+            f"Algorithm '{effective_sig_alg}' is not in allowed algorithms: {sorted(normalized_allowed)}",
         )
 
     enabled_sigs = oqs.get_enabled_sig_mechanisms()
-    if sig_alg not in enabled_sigs:
+    if effective_sig_alg not in enabled_sigs:
         return PolicyVerificationResult(
-            is_valid=False,
-            status=PolicyVerificationStatus.UNSUPPORTED_ALGORITHM,
-            message=f"Algorithm '{sig_alg}' is not enabled in local liboqs installation.",
+            False,
+            PolicyVerificationStatus.UNSUPPORTED_ALGORITHM,
+            f"Algorithm '{effective_sig_alg}' is not enabled in liboqs.",
         )
 
-    # 5. Cryptographic Signature Verification (Authentication)
+    # 6. Cryptographic signature verification
     sig_verifier = None
     try:
-        sig_verifier = oqs.Signature(sig_alg)
-        is_crypto_valid = sig_verifier.verify(raw_bytes, bytes(signature), bytes(issuer_public_key))
+        sig_verifier = oqs.Signature(effective_sig_alg)
+        is_crypto_valid = sig_verifier.verify(raw_bytes, effective_sig, resolved_public_key)
         if not is_crypto_valid:
             return PolicyVerificationResult(
-                is_valid=False,
-                status=PolicyVerificationStatus.INVALID_SIGNATURE,
-                message="Cryptographic signature verification returned False (tampered policy or signature mismatch).",
+                False,
+                PolicyVerificationStatus.INVALID_SIGNATURE,
+                "Cryptographic signature verification returned False (tampered policy or signature mismatch).",
             )
     except Exception as exc:
         return PolicyVerificationResult(
-            is_valid=False,
-            status=PolicyVerificationStatus.INVALID_SIGNATURE,
-            message=f"Cryptographic verification error: {exc}",
+            False,
+            PolicyVerificationStatus.INVALID_SIGNATURE,
+            f"Cryptographic verification error: {exc}",
         )
     finally:
         if sig_verifier is not None:
             sig_verifier.free()
 
-    # 6. Monotonic Version Check (Anti-Rollback)
-    # Performed strictly AFTER cryptographic signature verification confirms authenticity
-    version = policy_dict["version"]
+    # 7. Monotonic version check (Anti-rollback)
+    # Strictly evaluated AFTER signature verification proves authentic origin
+    version = policy_dict["policy_version"]
     if last_seen_version is not None:
         if version < last_seen_version:
             return PolicyVerificationResult(
-                is_valid=False,
-                status=PolicyVerificationStatus.STALE_POLICY,
-                message=f"Policy version {version} is lower than last seen version {last_seen_version} (STALE_POLICY).",
+                False,
+                PolicyVerificationStatus.STALE_POLICY,
+                f"Policy version {version} is lower than last seen version {last_seen_version} (STALE_POLICY).",
             )
         elif version == last_seen_version and not allow_equal_version:
             return PolicyVerificationResult(
-                is_valid=False,
-                status=PolicyVerificationStatus.STALE_POLICY,
-                message=f"Policy version {version} equals last seen version {last_seen_version} under strict monotonic policy.",
+                False,
+                PolicyVerificationStatus.STALE_POLICY,
+                f"Policy version {version} equals last seen version {last_seen_version} under strict monotonic policy.",
             )
 
     return PolicyVerificationResult(
-        is_valid=True,
-        status=PolicyVerificationStatus.VALID,
-        message="Policy signature, structure, algorithm, and monotonic version successfully verified.",
+        True,
+        PolicyVerificationStatus.VALID,
+        "Policy signature, authority, structure, algorithm, and monotonic version successfully verified.",
+    )
+
+
+def verify_signed_envelope(
+    envelope: Mapping[str, Any] | bytes | SignedPolicyEnvelope,
+    issuer_public_key: Optional[bytes] = None,
+    authority_registry: Optional[Mapping[str, bytes]] = None,
+    allowed_algorithms: Container[str] | None = None,
+    last_seen_version: int | None = None,
+    allow_equal_version: bool = True,
+) -> PolicyVerificationResult:
+    """Verifies a signed policy envelope."""
+    return verify_policy(
+        policy_input=envelope,
+        issuer_public_key=issuer_public_key,
+        authority_registry=authority_registry,
+        allowed_algorithms=allowed_algorithms,
+        last_seen_version=last_seen_version,
+        allow_equal_version=allow_equal_version,
     )

@@ -288,6 +288,8 @@ class S3GatewayHook:
                 signals.version_check_failed = True
             elif "floor" in reason_lc or "mode" in reason_lc or "downgrade" in reason_lc:
                 signals.mode_below_floor = True
+            elif "unknown" in reason_lc and "device" in reason_lc:
+                signals.auth_check_failed = True
             elif "unknown" in reason_lc and "flow" in reason_lc:
                 signals.invalid_format = True
             else:
