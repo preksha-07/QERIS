@@ -40,8 +40,21 @@ export const Dashboard: React.FC<DashboardProps> = ({ gatewayOnline }) => {
   const [selectedLog, setSelectedLog] = useState<AuditLog | null>(null);
 
   useEffect(() => {
-    getAuditLogs().then(({ data }) => setLogs(data));
-    getSecurityEvents().then(({ data }) => setEvents(data));
+    let active = true;
+    const fetchLatest = () => {
+      getAuditLogs().then(({ data }) => {
+        if (active && data) setLogs(data);
+      });
+      getSecurityEvents().then(({ data }) => {
+        if (active && data) setEvents(data);
+      });
+    };
+    fetchLatest();
+    const interval = setInterval(fetchLatest, 3000);
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
   }, []);
 
   const stats = computeStats(logs);

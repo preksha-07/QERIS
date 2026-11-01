@@ -16,5 +16,17 @@
         "minimum_mode": "PQC",
         "policy_version": 1,
         "authority_id": "QERIS-GATEWAY"
+    },
+    "pressure_03": {
+        "sensitivity": "HIGH",
+        "minimum_mode": "HYBRID",
+        "policy_version": 1,
+        "authority_id": "QERIS-GATEWAY"
+    },
+    "vibration_02": {
+        "sensitivity": "MEDIUM",
+        "minimum_mode": "HYBRID",
+        "policy_version": 1,
+        "authority_id": "QERIS-GATEWAY"
     }
 }

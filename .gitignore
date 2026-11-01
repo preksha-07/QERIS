@@ -44,3 +44,7 @@ qeris/s2/authority_keys/*.key
 # Policy version store (runtime state, generated on startup)
 qeris/s2/policy_version_store.json
 qeris/s2/policy_version_store.sha256
+
+# Large dataset files
+data/*.csv
+data/*.db

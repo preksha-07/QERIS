@@ -13,7 +13,18 @@ export const AuditLogs: React.FC = () => {
   const [selectedLog, setSelectedLog] = useState<AuditLog | null>(null);
 
   useEffect(() => {
-    getAuditLogs().then(({ data }) => setLogs(data));
+    let active = true;
+    const fetchLatest = () => {
+      getAuditLogs().then(({ data }) => {
+        if (active && data) setLogs(data);
+      });
+    };
+    fetchLatest();
+    const interval = setInterval(fetchLatest, 3000);
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
   }, []);
 
   const filtered = logs.filter((log) => {

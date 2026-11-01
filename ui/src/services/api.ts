@@ -20,10 +20,8 @@ import type {
 import { SECURITY_LEVEL } from '../types/qeris';
 
 import {
-  mockAuditLogs,
   mockDevices,
   mockPolicies,
-  mockSecurityEvents,
 } from '../data/mockData';
 
 // ─── Config ───────────────────────────────────────────────────────────────────
@@ -56,9 +54,7 @@ async function fetchWithTimeout(
 
 export async function getGatewayStatus(): Promise<GatewayStatus> {
   try {
-    const res = await fetchWithTimeout(`${API_BASE_URL}/docs`, {
-      method: 'HEAD',
-    });
+    const res = await fetchWithTimeout(`${API_BASE_URL}/health`);
     return { online: res.ok || res.status === 200, checked_at: new Date().toISOString() };
   } catch {
     return { online: false, checked_at: new Date().toISOString() };
@@ -204,47 +200,81 @@ export function checkFlowMock(
   };
 }
 
-// ─── Mock endpoints (future backend) ─────────────────────────────────────────
-// These functions return mock data while the endpoints are not yet implemented.
-// Replace the mock body with a real fetch call once the backend endpoints exist.
+// ─── Real backend endpoints ───────────────────────────────────────────────────
 
-export async function getFlows(): Promise<{ data: Policy[]; mocked: boolean }> {
-  // TODO: Replace with GET /flows when available
-  await delay(120);
-  return { data: mockPolicies, mocked: true };
+export async function getFlows(): Promise<{ data: Policy[]; mocked: boolean; error?: string | null }> {
+  try {
+    const res = await fetchWithTimeout(`${API_BASE_URL}/flows`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data: Policy[] = await res.json();
+    return { data, mocked: false, error: null };
+  } catch (err: any) {
+    return { data: [], mocked: false, error: err?.message ?? 'Failed to fetch flows' };
+  }
 }
 
-export async function getDevices(): Promise<{ data: Device[]; mocked: boolean }> {
-  // TODO: Replace with GET /devices when available
-  await delay(80);
-  return { data: mockDevices, mocked: true };
+export async function getDevices(): Promise<{ data: Device[]; mocked: boolean; error?: string | null }> {
+  try {
+    const res = await fetchWithTimeout(`${API_BASE_URL}/devices`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data: Device[] = await res.json();
+    return { data, mocked: false, error: null };
+  } catch (err: any) {
+    return { data: [], mocked: false, error: err?.message ?? 'Failed to fetch devices' };
+  }
 }
 
-export async function getPolicies(): Promise<{ data: Policy[]; mocked: boolean }> {
-  // TODO: Replace with GET /policies when available
-  await delay(100);
-  return { data: mockPolicies, mocked: true };
+export async function getPolicies(): Promise<{ data: Policy[]; mocked: boolean; error?: string | null }> {
+  try {
+    const res = await fetchWithTimeout(`${API_BASE_URL}/policies`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data: Policy[] = await res.json();
+    return { data, mocked: false, error: null };
+  } catch (err: any) {
+    return { data: [], mocked: false, error: err?.message ?? 'Failed to fetch policies' };
+  }
 }
 
-export async function getAuditLogs(): Promise<{ data: AuditLog[]; mocked: boolean }> {
-  // TODO: Replace with GET /audit-logs when available
-  await delay(150);
-  return { data: mockAuditLogs, mocked: true };
+export async function getAuditLogs(): Promise<{ data: AuditLog[]; mocked: boolean; error?: string | null }> {
+  try {
+    const res = await fetchWithTimeout(`${API_BASE_URL}/audit-logs`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data: AuditLog[] = await res.json();
+    return { data, mocked: false, error: null };
+  } catch (err: any) {
+    return { data: [], mocked: false, error: err?.message ?? 'Failed to fetch audit logs' };
+  }
 }
 
 export async function getSecurityEvents(): Promise<{
   data: SecurityEvent[];
   mocked: boolean;
+  error?: string | null;
 }> {
-  // TODO: Replace with GET /security-events when available
-  await delay(100);
-  return { data: mockSecurityEvents, mocked: true };
+  try {
+    const res = await fetchWithTimeout(`${API_BASE_URL}/security-events`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data: SecurityEvent[] = await res.json();
+    return { data, mocked: false, error: null };
+  } catch (err: any) {
+    return { data: [], mocked: false, error: err?.message ?? 'Failed to fetch security events' };
+  }
 }
 
-// ─── Utility ──────────────────────────────────────────────────────────────────
-
-function delay(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+export async function getDatasetSample(
+  deviceId: string,
+  flowId?: string
+): Promise<{ record: any | null; formatted_message: string | null; error?: string | null }> {
+  try {
+    const flowParam = flowId ? `&flow_id=${encodeURIComponent(flowId)}` : '';
+    const url = `${API_BASE_URL}/dataset/sample?device_id=${encodeURIComponent(deviceId)}${flowParam}`;
+    const res = await fetchWithTimeout(url);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    return { record: data.record, formatted_message: data.formatted_message, error: null };
+  } catch (err: any) {
+    return { record: null, formatted_message: null, error: err?.message ?? 'Failed to fetch sample' };
+  }
 }
 
 // ─── Crypto Demo (real endpoint) ──────────────────────────────────────────────
@@ -252,7 +282,8 @@ function delay(ms: number) {
 export async function runCryptoDemo(
   deviceId: string,
   flowId: string,
-  message: string
+  message: string,
+  requestedMode: string = 'PQC'
 ): Promise<{ data: any | null; error: string | null }> {
   try {
     const res = await fetchWithTimeout(`${API_BASE_URL}/crypto-demo`, {
@@ -262,6 +293,7 @@ export async function runCryptoDemo(
         device_id: deviceId,
         flow_id: flowId,
         message,
+        requested_mode: requestedMode,
       }),
     });
 
@@ -285,57 +317,53 @@ export async function simulateTransmission(
   // ── 1. Gateway policy check ─────────────────────────────────────────────
   const { data: realData, error: checkError } = await checkFlow(request);
 
-  let gatewayResponse: FlowResponse;
-  let wasMocked: boolean;
-  let requestError: string | null = null;
-
-  if (!checkError && realData) {
-    gatewayResponse = realData;
-    wasMocked = false;
-  } else {
-    // Offline fallback — replicate gateway logic client-side
-    const { data: mockData } = checkFlowMock(request);
-    gatewayResponse = mockData;
-    wasMocked = true;
-    requestError = checkError ?? 'Gateway unreachable';
+  if (checkError || !realData) {
+    return {
+      result: {
+        gateway: {
+          flow_id: request.flow_id,
+          sensitivity: null,
+          minimum_mode: null,
+          policy_version: null,
+          authority_id: 'QERIS-GATEWAY',
+          requested_mode: request.requested_mode,
+          decision: 'REJECT',
+          reason: checkError ?? 'Gateway unreachable',
+        },
+        crypto: null,
+        message,
+      },
+      mocked: false,
+      error: checkError ?? 'Gateway unreachable',
+    };
   }
 
-  // ── 2. Crypto / data-path stage ─────────────────────────────────────────
-  // Order: Policy / sensitivity -> Minimum security floor -> Requested mode validation -> Device capability -> ALLOW / REJECT.
-  // Crypto only for an allowed flow. For rejected or floor-unreachable: do NOT perform crypto stage.
+  const gatewayResponse = realData;
   let cryptoResult: CryptoResult | null = null;
 
+  // ── 2. Crypto stage (only when gateway permits) ──────────────────────────
   if (gatewayResponse.decision === 'ALLOW') {
-    if (!wasMocked) {
-      const { data: cryptoData, error: cryptoError } = await runCryptoDemo(
-        request.device_id,
-        request.flow_id,
-        message
-      );
+    const { data: cryptoData, error: cryptoError } = await runCryptoDemo(
+      request.device_id,
+      request.flow_id,
+      message,
+      request.requested_mode
+    );
 
-      if (!cryptoError && cryptoData && cryptoData.decision === 'ALLOW') {
-        cryptoResult = {
-          ciphertext_hex: cryptoData.ciphertext_hex ?? null,
-          kem_encapsulated_key_hex: cryptoData.kem_encapsulated_key_hex ?? null,
-          decrypted_message: cryptoData.decrypted_message ?? null,
-          algorithm: cryptoData.crypto ?? 'ML-KEM + HKDF-SHA256 + AES-256-GCM',
-          crypto_status: 'SECURE',
-        };
-      } else {
-        cryptoResult = {
-          ciphertext_hex: null,
-          kem_encapsulated_key_hex: null,
-          decrypted_message: null,
-          algorithm: 'ML-KEM + HKDF-SHA256 + AES-256-GCM',
-          crypto_status: 'UNAVAILABLE',
-        };
-      }
+    if (!cryptoError && cryptoData && cryptoData.decision === 'ALLOW') {
+      cryptoResult = {
+        ciphertext_hex: cryptoData.ciphertext_hex ?? null,
+        kem_encapsulated_key_hex: cryptoData.kem_ciphertext_hex ?? cryptoData.device_public_key_hex ?? null,
+        decrypted_message: cryptoData.decrypted_message ?? null,
+        algorithm: cryptoData.crypto_suite ?? 'ML-KEM-512 + HKDF-SHA256 + AES-256-GCM',
+        crypto_status: 'SECURE',
+      };
     } else {
       cryptoResult = {
         ciphertext_hex: null,
         kem_encapsulated_key_hex: null,
         decrypted_message: null,
-        algorithm: 'ML-KEM + HKDF-SHA256 + AES-256-GCM',
+        algorithm: cryptoData?.crypto_suite ?? null,
         crypto_status: 'UNAVAILABLE',
       };
     }
@@ -347,7 +375,7 @@ export async function simulateTransmission(
       crypto: cryptoResult,
       message,
     },
-    mocked: wasMocked,
-    error: requestError,
+    mocked: false,
+    error: null,
   };
 }

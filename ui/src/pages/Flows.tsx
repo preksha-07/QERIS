@@ -3,7 +3,8 @@ import { Activity, Play, Search } from 'lucide-react';
 import { FlowTable } from '../components/FlowTable';
 import { FlowDetailModal } from '../components/FlowDetailModal';
 import { SecurityEventCard } from '../components/SecurityEvent';
-import { getAuditLogs, getSecurityEvents, checkFlow, checkFlowMock } from '../services/api';
+import { getAuditLogs, getSecurityEvents, getDevices, getPolicies, checkFlow, checkFlowMock } from '../services/api';
+import type { Device, Policy } from '../types/qeris';
 import { demoScenarios } from '../data/mockData';
 import { mockDevices, mockPolicies } from '../data/mockData';
 import type { AuditLog, FlowResponse, SecurityEvent, SecurityMode } from '../types/qeris';
@@ -30,10 +31,34 @@ export const Flows: React.FC = () => {
   const [customLoading, setCustomLoading] = useState(false);
   const [customMocked, setCustomMocked] = useState(false);
 
+  const [devices, setDevices] = useState<Device[]>([]);
+  const [policies, setPolicies] = useState<Policy[]>([]);
+
   useEffect(() => {
-    getAuditLogs().then(({ data }) => setLogs(data));
-    getSecurityEvents().then(({ data }) => setEvents(data));
+    getDevices().then(({ data }) => { if (data && data.length > 0) setDevices(data); });
+    getPolicies().then(({ data }) => { if (data && data.length > 0) setPolicies(data); });
   }, []);
+
+  useEffect(() => {
+    let active = true;
+    const fetchLatest = () => {
+      getAuditLogs().then(({ data }) => {
+        if (active && data) setLogs(data);
+      });
+      getSecurityEvents().then(({ data }) => {
+        if (active && data) setEvents(data);
+      });
+    };
+    fetchLatest();
+    const interval = setInterval(fetchLatest, 3000);
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
+  }, []);
+
+  const deviceList = devices.length > 0 ? devices : mockDevices;
+  const policyList = policies.length > 0 ? policies : mockPolicies;
 
   // ── Demo scenario runner ──────────────────────────────────────────────────
   async function runScenario(index: number) {
@@ -158,7 +183,7 @@ export const Flows: React.FC = () => {
                     cursor: 'pointer',
                   }}
                 >
-                  {mockDevices.map((d) => (
+                  {deviceList.map((d) => (
                     <option key={d.device_id} value={d.device_id}>
                       {d.device_id}
                     </option>
@@ -189,7 +214,7 @@ export const Flows: React.FC = () => {
                     cursor: 'pointer',
                   }}
                 >
-                  {mockPolicies.map((p) => (
+                  {policyList.map((p) => (
                     <option key={p.flow_id} value={p.flow_id}>
                       {p.flow_id}
                     </option>

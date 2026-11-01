@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { Cpu, AlertTriangle, Radio, Lock, Unlock } from 'lucide-react';
 import { DeviceTable } from '../components/DeviceTable';
-import { getDevices, simulateTransmission } from '../services/api';
+import { getDevices, getPolicies, getDatasetSample, simulateTransmission } from '../services/api';
+import type { Policy } from '../types/qeris';
 import { mockPolicies, mockDevices } from '../data/mockData';
 import type { Device, SecurityMode, TransmissionResult } from '../types/qeris';
 import { SECURITY_LEVEL } from '../types/qeris';
@@ -49,11 +50,12 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
 
 export const Devices: React.FC = () => {
   const [devices, setDevices] = useState<Device[]>([]);
+  const [policies, setPolicies] = useState<Policy[]>([]);
 
   // ── Simulation state ─────────────────────────────────────────────────────
   const [simDevice, setSimDevice] = useState<string>(mockDevices[0].device_id);
   const [simFlow, setSimFlow]     = useState<string>(mockPolicies[0].flow_id);
-  const [simMessage, setSimMessage] = useState<string>('Temperature = 23.4 C');
+  const [simMessage, setSimMessage] = useState<string>('Loading dataset sample…');
   const [simMode, setSimMode]     = useState<SecurityMode>('CLASSICAL');
   const [simLoading, setSimLoading] = useState(false);
   const [simResult, setSimResult]  = useState<TransmissionResult | null>(null);
@@ -61,8 +63,22 @@ export const Devices: React.FC = () => {
   const [simError, setSimError]   = useState<string | null>(null);
 
   useEffect(() => {
-    getDevices().then(({ data }) => setDevices(data));
+    getDevices().then(({ data }) => {
+      if (data && data.length > 0) setDevices(data);
+    });
+    getPolicies().then(({ data }) => {
+      if (data && data.length > 0) setPolicies(data);
+    });
   }, []);
+
+  // Fetch real sample from dataset when device or flow changes
+  useEffect(() => {
+    getDatasetSample(simDevice, simFlow).then(({ formatted_message }) => {
+      if (formatted_message) {
+        setSimMessage(formatted_message);
+      }
+    });
+  }, [simDevice, simFlow]);
 
   // When device changes, keep user selection clean without forced resets
   function handleDeviceChange(deviceId: string) {
@@ -71,9 +87,11 @@ export const Devices: React.FC = () => {
     setSimError(null);
   }
 
-  // Derive selected device object for live hints
-  const selectedDevice = mockDevices.find((d) => d.device_id === simDevice);
-  const selectedPolicy = mockPolicies.find((p) => p.flow_id === simFlow);
+  // Derive selected device and policy objects using live backend lists
+  const deviceList = devices.length > 0 ? devices : mockDevices;
+  const policyList = policies.length > 0 ? policies : mockPolicies;
+  const selectedDevice = deviceList.find((d) => d.device_id === simDevice);
+  const selectedPolicy = policyList.find((p) => p.flow_id === simFlow);
 
   async function runSimulation() {
     setSimLoading(true);
@@ -159,7 +177,7 @@ export const Devices: React.FC = () => {
                   onChange={(e) => handleDeviceChange(e.target.value)}
                   style={SELECT_STYLE}
                 >
-                  {mockDevices.map((d) => (
+                  {deviceList.map((d) => (
                     <option key={d.device_id} value={d.device_id}>
                       {d.device_id}
                     </option>
@@ -193,7 +211,7 @@ export const Devices: React.FC = () => {
                   }}
                   style={SELECT_STYLE}
                 >
-                  {mockPolicies.map((p) => (
+                  {policyList.map((p) => (
                     <option key={p.flow_id} value={p.flow_id}>
                       {p.flow_id}
                     </option>
@@ -527,7 +545,7 @@ export const Devices: React.FC = () => {
               <Cpu size={14} color="var(--accent-cyan)" />
               Registered Devices
             </span>
-            <span className="mock-badge">DEMO DATA</span>
+            <span className="badge" style={{ background: "rgba(16, 185, 129, 0.1)", color: "var(--green)", borderColor: "rgba(16, 185, 129, 0.2)" }}>LIVE BACKEND</span>
           </div>
           <DeviceTable devices={devices} />
         </div>
@@ -552,7 +570,7 @@ export const Devices: React.FC = () => {
                 <thead>
                   <tr>
                     <th>Device</th>
-                    {mockPolicies.map((p) => (
+                    {policyList.map((p) => (
                       <th key={p.flow_id}>
                         {p.flow_id}
                         <div style={{ display: 'flex', marginTop: 3 }}>
@@ -563,10 +581,10 @@ export const Devices: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {devices.map((device) => (
+                  {deviceList.map((device) => (
                     <tr key={device.device_id}>
                       <td className="mono">{device.device_id}</td>
-                      {mockPolicies.map((policy) => {
+                      {policyList.map((policy) => {
                         const ok = canSatisfyFloor(device, policy.minimum_mode);
                         return (
                           <td key={policy.flow_id}>

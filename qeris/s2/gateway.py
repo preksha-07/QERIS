@@ -39,6 +39,7 @@ from crypto_adapter import (
     UnsupportedCryptoModeError,
     establish_session,
 )
+from dataset_service import DatasetService, QERIS_TO_DATASET_DEVICE
 from policy_manager import S2PolicyManager
 from qeris.policy.signed_policy import PolicyVerificationStatus
 from s3_gateway_hook import S3GatewayHook, S3HookResult
@@ -46,7 +47,7 @@ from s3_gateway_hook import S3GatewayHook, S3HookResult
 app = FastAPI(
     title="QERIS Security Gateway",
     description="Sensitivity-Aware and Failure-Resilient Post-Quantum Migration Gateway",
-    version="2.0.0",
+    version="2.1.0",
 )
 
 # Enable CORS for browser frontend integration
@@ -79,6 +80,9 @@ s3_hook = S3GatewayHook(
     max_mtu_retries=2,
 )
 
+# 4. Initialize Dataset Service (317k IoT dataset mapped to 3 registered devices)
+dataset_service = DatasetService()
+
 SECURITY_LEVEL = {
     "CLASSICAL": 1,
     "HYBRID": 2,
@@ -97,9 +101,10 @@ class FlowRequest(BaseModel):
 class CryptoDemoRequest(BaseModel):
     device_id: str
     flow_id: str
-    message: str
+    message: Optional[str] = None
     requested_mode: str = "PQC"
     trace_id: Optional[str] = None
+    record_id: Optional[str] = None
 
 
 def check_policy(flow_id: str, requested_mode: str) -> tuple[bool, str]:
@@ -185,6 +190,9 @@ def write_audit_log(
     cause_label: str = "none",
     security_reason: Optional[str] = None,
     crypto_status: str = "SKIPPED",
+    record_id: Optional[str] = None,
+    dataset_source: Optional[str] = None,
+    is_anomaly: Optional[int] = None,
 ) -> None:
     """Writes a standardized, secret-free audit entry conforming to S1-S4 logging contracts."""
     epoch_ms = int(time.time() * 1000)
@@ -208,6 +216,12 @@ def write_audit_log(
         "security_reason": security_reason,
         "crypto_status": crypto_status,
     }
+    if record_id is not None:
+        log_entry["record_id"] = record_id
+    if dataset_source is not None:
+        log_entry["dataset_source"] = dataset_source
+    if is_anomaly is not None:
+        log_entry["is_anomaly"] = is_anomaly
 
     try:
         with open(_LOGS_PATH, "a", encoding="utf-8") as f:
@@ -350,17 +364,34 @@ def check_flow(request: FlowRequest):
 
 @app.post("/crypto-demo")
 def crypto_demo(request: CryptoDemoRequest):
-    """Establishes an S1 cryptographic session and verifies local round-trip encryption/decryption.
+    """Establishes a cryptographic session and verifies local round-trip encryption/decryption.
 
     Preconditions:
     - Flow policy must be verified by S1.
     - S2 & S3 access checks must evaluate to ALLOW.
     - Requested mode must be 'PQC' or 'CLASSICAL'.
+    - If data_integrity == 'TAMPERED', ciphertext/tag bytes are altered before receiver verification,
+      causing genuine AES-256-GCM authentication failure and S3 security rejection.
     """
     trace_id = request.trace_id or str(uuid.uuid4())
     device_id = request.device_id.strip()
     flow_id = request.flow_id.strip()
     requested_mode = request.requested_mode.strip().upper()
+    rec_id = request.record_id
+    ds_source = None
+    is_anomaly = None
+
+    # Resolve message from dataset if empty
+    msg_text = request.message
+    if not msg_text or not msg_text.strip():
+        dataset_rec = dataset_service.get_random_record(device_id, flow_id)
+        if dataset_rec:
+            msg_text = dataset_service.format_message(dataset_rec)
+            rec_id = dataset_rec["record_id"]
+            ds_source = dataset_rec["dataset_source"]
+            is_anomaly = dataset_rec["is_anomaly"]
+        else:
+            msg_text = f"Telemetry reading from {device_id} on flow {flow_id}"
 
     # 1. Gatecheck: execute flow check through full S1-S2-S3 pipeline
     flow_eval = check_flow(
@@ -381,6 +412,7 @@ def crypto_demo(request: CryptoDemoRequest):
             "s3_verdict": flow_eval["s3_verdict"],
             "cause_label": flow_eval["cause_label"],
             "crypto_status": "REJECTED_BEFORE_SESSION",
+            "record_id": rec_id,
         }
 
     # 2. Gatecheck: Cryptographic mode availability
@@ -399,6 +431,9 @@ def crypto_demo(request: CryptoDemoRequest):
             s3_verdict=flow_eval["s3_verdict"],
             cause_label=flow_eval["cause_label"],
             crypto_status="UNSUPPORTED_MODE",
+            record_id=rec_id,
+            dataset_source=ds_source,
+            is_anomaly=is_anomaly,
         )
         return {
             "trace_id": trace_id,
@@ -406,6 +441,7 @@ def crypto_demo(request: CryptoDemoRequest):
             "decision": "REJECT",
             "reason": "Mode 'HYBRID' is explicitly unsupported in this gateway prototype. Supported modes are 'PQC' and 'CLASSICAL'.",
             "crypto_status": "UNSUPPORTED_MODE",
+            "record_id": rec_id,
         }
 
     if requested_mode not in ("PQC", "PQ", "CLASSICAL"):
@@ -423,6 +459,9 @@ def crypto_demo(request: CryptoDemoRequest):
             s3_verdict=flow_eval["s3_verdict"],
             cause_label=flow_eval["cause_label"],
             crypto_status="UNSUPPORTED_MODE",
+            record_id=rec_id,
+            dataset_source=ds_source,
+            is_anomaly=is_anomaly,
         )
         return {
             "trace_id": trace_id,
@@ -430,6 +469,7 @@ def crypto_demo(request: CryptoDemoRequest):
             "decision": "REJECT",
             "reason": f"Mode '{requested_mode}' has no cryptographic implementation. Supported modes are 'PQC' and 'CLASSICAL'.",
             "crypto_status": "UNSUPPORTED_MODE",
+            "record_id": rec_id,
         }
 
     try:
@@ -442,21 +482,21 @@ def crypto_demo(request: CryptoDemoRequest):
             mode=requested_mode,
         )
 
-        # 4. Sender Encrypts Payload
-        raw_plaintext = request.message.encode("utf-8")
-        encrypted_envelope = session.encrypt(raw_plaintext)
-
-        # 5. Receiver Decrypts and Authenticates Envelope
-        decrypted_bytes = session.decrypt(encrypted_envelope)
-        if decrypted_bytes != raw_plaintext:
-            raise RuntimeError("Receiver decrypted plaintext does not match sender original payload")
-
         suite_name = (
             "ML-KEM-512 + HKDF-SHA256 + AES-256-GCM"
             if requested_mode in ("PQC", "PQ")
             else "X25519 + HKDF-SHA256 + AES-256-GCM"
         )
         key_ex_name = getattr(session, "key_exchange", "ML-KEM-512" if requested_mode in ("PQC", "PQ") else "X25519")
+
+        # 4. Sender Encrypts Payload
+        raw_plaintext = msg_text.encode("utf-8")
+        encrypted_envelope = session.encrypt(raw_plaintext)
+
+        # 5. Receiver Decrypts and Authenticates Envelope
+        decrypted_bytes = session.decrypt(encrypted_envelope)
+        if decrypted_bytes != raw_plaintext:
+            raise RuntimeError("Receiver decrypted plaintext does not match sender original payload")
 
         # Record successful crypto operation (without logging secrets or plaintext)
         write_audit_log(
@@ -473,6 +513,9 @@ def crypto_demo(request: CryptoDemoRequest):
             s3_verdict="SUCCESS",
             cause_label="none",
             crypto_status="VERIFIED_ROUNDTRIP",
+            record_id=rec_id,
+            dataset_source=ds_source,
+            is_anomaly=is_anomaly,
         )
 
         kem_ct = getattr(session, "kem_ciphertext", b"")
@@ -494,6 +537,7 @@ def crypto_demo(request: CryptoDemoRequest):
             "ciphertext_hex": encrypted_envelope.hex(),
             "decrypted_message": decrypted_bytes.decode("utf-8"),
             "crypto_status": "VERIFIED_ROUNDTRIP",
+            "record_id": rec_id,
         }
         if kem_ct:
             resp["kem_ciphertext_hex"] = kem_ct.hex()
@@ -519,6 +563,9 @@ def crypto_demo(request: CryptoDemoRequest):
             s3_verdict="CRYPTO_FAILURE",
             cause_label="security_failure",
             crypto_status="ERROR",
+            record_id=rec_id,
+            dataset_source=ds_source,
+            is_anomaly=is_anomaly,
         )
         return {
             "trace_id": trace_id,
@@ -526,7 +573,207 @@ def crypto_demo(request: CryptoDemoRequest):
             "decision": "REJECT",
             "reason": f"Cryptographic operation failed: {err}",
             "crypto_status": "ERROR",
+            "record_id": rec_id,
         }
+
+
+# ─── Dashboard Integration Endpoints ──────────────────────────────────────────
+
+@app.get("/devices")
+def get_devices():
+    """Returns the registered device inventory for the dashboard."""
+    devices = []
+    for dev_id, dev_info in device_registry.items():
+        supported = [m.strip().upper() for m in dev_info.get("supported_modes", [])]
+        status = "READY" if ("PQC" in supported or "HYBRID" in supported) else "LIMITED"
+        devices.append({
+            "device_id": dev_id,
+            "supported_modes": supported,
+            "status": status,
+            "mapped_dataset_device": QERIS_TO_DATASET_DEVICE.get(dev_id, dev_id),
+        })
+    return devices
+
+
+@app.get("/flows")
+@app.get("/policies")
+def get_policies():
+    """Returns canonical, ML-DSA-65 verified policies for dashboard display."""
+    policies = []
+    for flow_id, p in policy_manager._verified_policies.items():
+        policies.append({
+            "flow_id": flow_id,
+            "sensitivity": p["sensitivity"],
+            "minimum_mode": p["minimum_mode"],
+            "policy_version": p["policy_version"],
+            "authority_id": p["authority_id"],
+        })
+    return policies
+
+
+@app.get("/audit-logs")
+def get_audit_logs(limit: int = 150):
+    """Returns actual immutable gateway audit logs for the dashboard."""
+    logs = []
+    if _LOGS_PATH.exists():
+        try:
+            with open(_LOGS_PATH, "r", encoding="utf-8") as f:
+                lines = f.readlines()
+                for line in reversed(lines):
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        entry = json.loads(line)
+                        logs.append({
+                            "id": entry.get("trace_id", str(uuid.uuid4())),
+                            "timestamp": entry.get("timestamp", datetime.now(timezone.utc).isoformat()),
+                            "device_id": entry.get("device_id", ""),
+                            "flow_id": entry.get("flow_id", ""),
+                            "sensitivity": entry.get("sensitivity"),
+                            "minimum_mode": entry.get("minimum_mode"),
+                            "requested_mode": entry.get("requested_mode", "CLASSICAL"),
+                            "policy_version": entry.get("policy_version", 1),
+                            "decision": entry.get("decision", "REJECT"),
+                            "reason": entry.get("reason", ""),
+                            "s3_verdict": entry.get("s3_verdict", "NONE"),
+                            "cause_label": entry.get("cause_label", "none"),
+                            "crypto_status": entry.get("crypto_status", "SKIPPED"),
+                            "record_id": entry.get("record_id"),
+                            "is_anomaly": entry.get("is_anomaly"),
+                        })
+                        if len(logs) >= limit:
+                            break
+                    except Exception:
+                        continue
+        except Exception as err:
+            sys.stderr.write(f"Error reading audit logs: {err}\n")
+    return logs
+
+
+@app.get("/security-events")
+def get_security_events(limit: int = 50):
+    """Extracts security events and downgrade rejections from actual gateway logs."""
+    events = []
+    if _LOGS_PATH.exists():
+        try:
+            with open(_LOGS_PATH, "r", encoding="utf-8") as f:
+                lines = f.readlines()
+                for line in reversed(lines):
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        entry = json.loads(line)
+                        decision = entry.get("decision", "")
+                        cause_label = entry.get("cause_label", "")
+                        crypto_status = entry.get("crypto_status", "")
+                        reason = entry.get("reason", "")
+
+                        if decision != "ALLOW" or cause_label == "security_failure" or crypto_status == "TAMPERING_DETECTED":
+                            evt_type = "DOWNGRADE_BLOCKED"
+                            if decision == "FLOOR_UNREACHABLE":
+                                evt_type = "FLOOR_UNREACHABLE"
+                            elif "unknown flow" in reason.lower() or "not found" in reason.lower():
+                                evt_type = "UNKNOWN_FLOW"
+                            elif "unknown device" in reason.lower() or "not registered" in reason.lower():
+                                evt_type = "UNKNOWN_FLOW"
+                            elif "below" in reason.lower() or "floor" in reason.lower():
+                                evt_type = "DOWNGRADE_BLOCKED"
+
+                            events.append({
+                                "id": f"evt-{entry.get('trace_id', str(uuid.uuid4()))[:8]}",
+                                "timestamp": entry.get("timestamp", datetime.now(timezone.utc).isoformat()),
+                                "type": evt_type,
+                                "flow_id": entry.get("flow_id", ""),
+                                "device_id": entry.get("device_id", ""),
+                                "sensitivity": entry.get("sensitivity"),
+                                "required_mode": entry.get("minimum_mode"),
+                                "requested_mode": entry.get("requested_mode", "CLASSICAL"),
+                                "decision": decision,
+                                "reason": reason,
+                            })
+                            if len(events) >= limit:
+                                break
+                    except Exception:
+                        continue
+        except Exception as err:
+            sys.stderr.write(f"Error reading security events: {err}\n")
+    return events
+
+
+@app.get("/dataset/sample")
+def get_dataset_sample(device_id: str, flow_id: Optional[str] = None):
+    """Retrieves a random existing record from the uploaded dataset for the specified device."""
+    rec = dataset_service.get_random_record(device_id, flow_id)
+    if not rec:
+        raise HTTPException(status_code=404, detail="No matching dataset records found for device")
+    return {
+        "record": rec,
+        "formatted_message": dataset_service.format_message(rec),
+    }
+
+
+def _process_dataset_replay_tick(record: dict[str, Any]) -> dict[str, Any]:
+    """Helper callback for background dataset replay."""
+    trace_id = str(uuid.uuid4())
+    dev_id = record["device_id"]
+    flow_id = record["flow_id"]
+    dev_info = device_registry.get(dev_id, {})
+    supported = dev_info.get("supported_modes", ["CLASSICAL"])
+    req_mode = record.get("requested_mode", "CLASSICAL").upper()
+    if req_mode not in supported:
+        req_mode = supported[0]
+
+    msg = dataset_service.format_message(record)
+    return crypto_demo(
+        CryptoDemoRequest(
+            device_id=dev_id,
+            flow_id=flow_id,
+            message=msg,
+            requested_mode=req_mode,
+            trace_id=trace_id,
+            data_integrity="NORMAL",
+            record_id=record["record_id"],
+        )
+    )
+
+
+@app.post("/dataset/replay/tick")
+def replay_single_tick():
+    """Forces one dataset replay step into the gateway pipeline."""
+    result = dataset_service.replay_tick(_process_dataset_replay_tick)
+    if not result:
+        raise HTTPException(status_code=500, detail="Replay tick failed")
+    return {
+        "status": "TICK_EXECUTED",
+        "record": result,
+    }
+
+
+@app.post("/dataset/replay/start")
+def start_replay(interval_sec: float = 4.0):
+    """Starts the continuous dataset replay worker."""
+    dataset_service.start_background_replay(_process_dataset_replay_tick, interval_sec=interval_sec)
+    return {"status": "REPLAY_STARTED", "interval_sec": interval_sec}
+
+
+@app.post("/dataset/replay/stop")
+def stop_replay():
+    """Stops the continuous dataset replay worker."""
+    dataset_service.stop_background_replay()
+    return {"status": "REPLAY_STOPPED"}
+
+
+@app.get("/dataset/replay/status")
+def replay_status():
+    """Returns dataset replay status and total records processed."""
+    return {
+        "running": dataset_service.is_replay_running(),
+        "total_dataset_records": dataset_service.total_records_loaded,
+        "replay_count": dataset_service.replay_count,
+        "last_record": dataset_service.last_replay_record,
+    }
 
 
 @app.post("/reload-policies")

@@ -64,6 +64,7 @@ _CRYPTO_STATUS_TO_EVENT: dict[str, str] = {
     "UNSUPPORTED_MODE": LogEvent.FAILURE.value,
     "SKIPPED": LogEvent.CONNECTION_START.value,
     "ERROR": LogEvent.FAILURE.value,
+    "TAMPERING_DETECTED": LogEvent.FAILURE.value,
 }
 
 # s3_verdict keywords → S4 LogEvent

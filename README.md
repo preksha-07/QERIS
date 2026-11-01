@@ -1,6 +1,6 @@
 # QERIS: Sensitivity-Aware and Failure-Resilient Post-Quantum Migration Gateway
 
-[![Tests](https://img.shields.io/badge/tests-256%20passed-brightgreen.svg)]()
+[![Tests](https://img.shields.io/badge/tests-268%20passed-brightgreen.svg)]()
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)]()
 [![Cryptography](https://img.shields.io/badge/crypto-ML--KEM--512%20%7C%20ML--DSA--65%20%7C%20X25519-orange.svg)]()
 [![License](https://img.shields.io/badge/license-MIT-lightgrey.svg)]()
@@ -71,7 +71,7 @@ Policies are decoupled from cryptographic signatures via `SignedPolicyEnvelope` 
 & "..\.venv\Scripts\Activate.ps1"
 python -m pytest -v
 ```
-**Test Results:** All 256 tests (S1: 55, S3: 103, S4: 70, Classical Add-on & E2E: 28) pass with zero failures.
+**Test Results:** All 268 tests (S1: 55, S3: 103, S4: 70, Classical Add-on, E2E & Dataset: 40) pass with zero failures.
 
 ### 2. Launch Gateway Server
 ```powershell
@@ -79,8 +79,19 @@ cd qeris/s2
 uvicorn gateway:app --reload
 ```
 
-### 3. Verify Endpoints
+### 3. Launch Dashboard UI
+```powershell
+cd ui
+npm run dev
+```
+
+### 4. Verify Endpoints
 - **Health Check:** `GET http://localhost:8000/health`
+- **Devices Inventory:** `GET http://localhost:8000/devices`
+- **Verified Policies:** `GET http://localhost:8000/policies`
+- **Audit Logs:** `GET http://localhost:8000/audit-logs`
+- **Security Events:** `GET http://localhost:8000/security-events`
+- **Dataset Sample:** `GET http://localhost:8000/dataset/sample?device_id=device_001`
 - **Flow Check:** `POST http://localhost:8000/check-flow`
 - **Crypto Demo:** `POST http://localhost:8000/crypto-demo`
 
