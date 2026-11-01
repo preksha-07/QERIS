@@ -355,7 +355,7 @@ def crypto_demo(request: CryptoDemoRequest):
     Preconditions:
     - Flow policy must be verified by S1.
     - S2 & S3 access checks must evaluate to ALLOW.
-    - Requested mode must be 'PQC'.
+    - Requested mode must be 'PQC' or 'CLASSICAL'.
     """
     trace_id = request.trace_id or str(uuid.uuid4())
     device_id = request.device_id.strip()
@@ -384,7 +384,7 @@ def crypto_demo(request: CryptoDemoRequest):
         }
 
     # 2. Gatecheck: Cryptographic mode availability
-    if requested_mode not in ("PQC", "PQ"):
+    if requested_mode == "HYBRID":
         write_audit_log(
             trace_id=trace_id,
             device_id=device_id,
@@ -395,7 +395,7 @@ def crypto_demo(request: CryptoDemoRequest):
             policy_version=flow_eval["policy_version"],
             authority_id=flow_eval["authority_id"],
             decision="REJECT",
-            reason="Cryptographic session establishment is only implemented for mode 'PQC'.",
+            reason="Mode 'HYBRID' is explicitly unsupported in this gateway prototype.",
             s3_verdict=flow_eval["s3_verdict"],
             cause_label=flow_eval["cause_label"],
             crypto_status="UNSUPPORTED_MODE",
@@ -404,13 +404,37 @@ def crypto_demo(request: CryptoDemoRequest):
             "trace_id": trace_id,
             "flow_id": flow_id,
             "decision": "REJECT",
-            "reason": f"Mode '{requested_mode}' has no cryptographic implementation. Only post-quantum mode 'PQC' is supported.",
+            "reason": "Mode 'HYBRID' is explicitly unsupported in this gateway prototype. Supported modes are 'PQC' and 'CLASSICAL'.",
+            "crypto_status": "UNSUPPORTED_MODE",
+        }
+
+    if requested_mode not in ("PQC", "PQ", "CLASSICAL"):
+        write_audit_log(
+            trace_id=trace_id,
+            device_id=device_id,
+            flow_id=flow_id,
+            sensitivity=flow_eval["sensitivity"],
+            minimum_mode=flow_eval["minimum_mode"],
+            requested_mode=requested_mode,
+            policy_version=flow_eval["policy_version"],
+            authority_id=flow_eval["authority_id"],
+            decision="REJECT",
+            reason=f"Mode '{requested_mode}' has no cryptographic implementation. Supported modes are 'PQC' and 'CLASSICAL'.",
+            s3_verdict=flow_eval["s3_verdict"],
+            cause_label=flow_eval["cause_label"],
+            crypto_status="UNSUPPORTED_MODE",
+        )
+        return {
+            "trace_id": trace_id,
+            "flow_id": flow_id,
+            "decision": "REJECT",
+            "reason": f"Mode '{requested_mode}' has no cryptographic implementation. Supported modes are 'PQC' and 'CLASSICAL'.",
             "crypto_status": "UNSUPPORTED_MODE",
         }
 
     try:
-        # 3. Establish ML-KEM-512 + HKDF-SHA256 + AES-256-GCM Session
-        session: CryptoSession = establish_session(
+        # 3. Establish Session (PQC via ML-KEM-512 or Classical via X25519)
+        session = establish_session(
             device_id=device_id,
             flow_id=flow_id,
             sensitivity=str(flow_eval["sensitivity"]),
@@ -427,6 +451,13 @@ def crypto_demo(request: CryptoDemoRequest):
         if decrypted_bytes != raw_plaintext:
             raise RuntimeError("Receiver decrypted plaintext does not match sender original payload")
 
+        suite_name = (
+            "ML-KEM-512 + HKDF-SHA256 + AES-256-GCM"
+            if requested_mode in ("PQC", "PQ")
+            else "X25519 + HKDF-SHA256 + AES-256-GCM"
+        )
+        key_ex_name = getattr(session, "key_exchange", "ML-KEM-512" if requested_mode in ("PQC", "PQ") else "X25519")
+
         # Record successful crypto operation (without logging secrets or plaintext)
         write_audit_log(
             trace_id=trace_id,
@@ -438,29 +469,40 @@ def crypto_demo(request: CryptoDemoRequest):
             policy_version=flow_eval["policy_version"],
             authority_id=flow_eval["authority_id"],
             decision="ALLOW",
-            reason="Cryptographic session established and payload verified",
+            reason=f"Cryptographic session established ({suite_name}) and payload verified",
             s3_verdict="SUCCESS",
             cause_label="none",
             crypto_status="VERIFIED_ROUNDTRIP",
         )
 
-        kem_ct = session.kem_ciphertext
+        kem_ct = getattr(session, "kem_ciphertext", b"")
+        dev_pub = getattr(session, "device_public_key", b"")
+        gw_pub = getattr(session, "gateway_public_key", b"")
 
-        return {
+        resp = {
             "trace_id": trace_id,
             "flow_id": flow_id,
             "sensitivity": flow_eval["sensitivity"],
             "minimum_mode": flow_eval["minimum_mode"],
             "policy_version": flow_eval["policy_version"],
             "authority_id": flow_eval["authority_id"],
-            "crypto_suite": "ML-KEM-512 + HKDF-SHA256 + AES-256-GCM",
+            "requested_mode": requested_mode,
+            "crypto_suite": suite_name,
+            "key_exchange": key_ex_name,
             "decision": "ALLOW",
             "encrypted_envelope_length": len(encrypted_envelope),
             "ciphertext_hex": encrypted_envelope.hex(),
-            "kem_ciphertext_hex": kem_ct.hex() if kem_ct else None,
             "decrypted_message": decrypted_bytes.decode("utf-8"),
             "crypto_status": "VERIFIED_ROUNDTRIP",
         }
+        if kem_ct:
+            resp["kem_ciphertext_hex"] = kem_ct.hex()
+        if dev_pub:
+            resp["device_public_key_hex"] = dev_pub.hex()
+        if gw_pub:
+            resp["gateway_public_key_hex"] = gw_pub.hex()
+
+        return resp
 
     except Exception as err:
         write_audit_log(

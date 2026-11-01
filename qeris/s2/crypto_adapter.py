@@ -1,17 +1,25 @@
 """
-S2-S1 Cryptographic Adapter (Updated for QERIS Integration)
+S2 Cryptographic Adapter (Dual-Mode: Post-Quantum + Classical)
 
-Connects the S2 Security Gateway directly to S1 Post-Quantum Cryptographic Modules:
-- ML-KEM-512 (FIPS 203 key encapsulation)
-- HKDF-SHA256 (RFC 5869 context-bound key derivation)
-- AES-256-GCM (NIST SP 800-38D authenticated payload encryption)
+Connects the S2 Security Gateway to cryptographic session implementations:
+1. Post-Quantum Mode ('PQC' / 'PQ'):
+   - ML-KEM-512 (FIPS 203 key encapsulation mechanism)
+   - HKDF-SHA256 (RFC 5869 context-bound key derivation)
+   - AES-256-GCM (NIST SP 800-38D authenticated message encryption)
+2. Classical Mode ('CLASSICAL'):
+   - X25519 (RFC 7748 ephemeral Diffie–Hellman key agreement via qeris_classical)
+   - HKDF-SHA256 (RFC 5869 context-bound key derivation)
+   - AES-256-GCM (NIST SP 800-38D authenticated message encryption)
 
 Important Architectural Clarifications:
-- This adapter executes a verified local cryptographic round-trip session between emulated
-  sender and receiver endpoints. It is NOT a remote network device-to-gateway transport protocol.
-- Only the post-quantum mode ('PQC' / 'PQ') is cryptographically implemented.
-- 'CLASSICAL' and 'HYBRID' cryptographic handshakes are explicitly NOT implemented in this prototype;
-  any attempt to establish a session under those modes raises UnsupportedCryptoModeError.
+- This adapter executes verified local cryptographic round-trip sessions between emulated
+  sender and receiver endpoints. It is a local session demonstration, NOT a remote network transport protocol.
+- Both PQC and CLASSICAL derive context-bound keys using HKDF-SHA256 and encrypt payloads using the
+  same QMSG v1 envelope, monotonic 96-bit counter nonce, and authenticated associated data (AAD).
+- 'HYBRID' mode is explicitly NOT implemented in this prototype; any attempt to establish a session
+  under HYBRID raises UnsupportedCryptoModeError.
+- X25519 key agreement alone does not authenticate the communicating peer. In this local demonstration,
+  keys are generated ephemerally; a production network deployment must bind and authenticate keys to peer identities.
 - Cryptographic material (private keys, shared secrets, session keys, raw plaintext) is NEVER logged.
 """
 from __future__ import annotations
@@ -20,15 +28,18 @@ from dataclasses import dataclass
 import os
 from pathlib import Path
 import sys
-from typing import Any, Final, Optional
+from typing import Any, Final, Optional, Union
 
-# Ensure S1 is on sys.path
+# Ensure S1 and repo root are on sys.path
 _S2_DIR = Path(__file__).resolve().parent
 _REPO_ROOT = _S2_DIR.parent.parent
 _S1_DIR = _REPO_ROOT / "qeris" / "s1"
-if str(_S1_DIR) not in sys.path:
-    sys.path.insert(0, str(_S1_DIR))
 
+for p in (str(_REPO_ROOT), str(_S1_DIR)):
+    if p not in sys.path:
+        sys.path.insert(0, p)
+
+# PQC Cryptographic Modules (S1)
 try:
     from qeris.session_crypto import (
         CIPHERTEXT_LENGTH,
@@ -36,24 +47,37 @@ try:
         SECRET_KEY_LENGTH,
         SHARED_SECRET_LENGTH,
         decapsulate,
-        derive_session_key,
+        derive_session_key as pqc_derive_session_key,
         encapsulate,
-        generate_keypair,
+        generate_keypair as pqc_generate_keypair,
     )
     from qeris.secure_message import (
         MAX_ENVELOPE_SIZE,
-        MessageContext,
-        MessageDecryptor,
-        MessageEncryptor,
+        MessageContext as PQCMessageContext,
+        MessageDecryptor as PQCMessageDecryptor,
+        MessageEncryptor as PQCMessageEncryptor,
     )
-    _CRYPTO_AVAILABLE = True
+    _PQC_CRYPTO_AVAILABLE = True
 except ImportError as err:
-    _CRYPTO_AVAILABLE = False
-    _IMPORT_ERROR = str(err)
+    _PQC_CRYPTO_AVAILABLE = False
+    _PQC_IMPORT_ERROR = str(err)
+
+# Classical Cryptographic Modules (qeris_classical)
+try:
+    from qeris_classical.adapter import (
+        ClassicalCryptoSession,
+        CryptoPreconditionError as ClassicalPreconditionError,
+        UnsupportedCryptoModeError as ClassicalUnsupportedModeError,
+        establish_session as establish_classical_session,
+    )
+    _CLASSICAL_AVAILABLE = True
+except ImportError as err:
+    _CLASSICAL_AVAILABLE = False
+    _CLASSICAL_IMPORT_ERROR = str(err)
 
 
 class UnsupportedCryptoModeError(NotImplementedError):
-    """Raised when attempting to establish a cryptographic session with an unimplemented mode."""
+    """Raised when attempting to establish a cryptographic session with an unimplemented or unsupported mode."""
 
 
 class CryptoPreconditionError(RuntimeError):
@@ -62,16 +86,17 @@ class CryptoPreconditionError(RuntimeError):
 
 @dataclass
 class CryptoSession:
-    """Manages persistent authenticated encryption and monotonic replay state for a verified flow session."""
+    """Manages persistent authenticated encryption and monotonic replay state for a verified PQC flow session."""
 
     device_id: str
     flow_id: str
     sensitivity: str
     policy_version: int
     mode: str
-    _encryptor: MessageEncryptor
-    _decryptor: MessageDecryptor
+    _encryptor: PQCMessageEncryptor
+    _decryptor: PQCMessageDecryptor
     kem_ciphertext: bytes = b""
+    key_exchange: str = "ML-KEM-512"
 
     def encrypt(self, plaintext: bytes) -> bytes:
         """Encrypt application payload using the session's monotonic GCM nonce counter."""
@@ -86,39 +111,42 @@ class CryptoSession:
         return self._decryptor.decrypt(bytes(envelope))
 
 
+# Type alias for any supported active session
+SessionType = Union[CryptoSession, ClassicalCryptoSession]
+
+
 def establish_session(
     device_id: str,
     flow_id: str,
     sensitivity: str,
     policy_version: int,
     mode: str = "PQC",
-) -> CryptoSession:
+) -> SessionType:
     """Establishes an authenticated cryptographic session bound to the verified policy context.
 
-    Preconditions:
-    1. S1 cryptographic dependencies (liboqs, cryptography) must be available.
-    2. Requested mode must be 'PQC' or 'PQ'. CLASSICAL and HYBRID modes are explicitly unsupported.
-    3. Context parameters must be non-empty and well-formed.
+    Dispatches to the appropriate cryptographic implementation based on the requested mode:
+    - 'PQC' or 'PQ': executes S1 ML-KEM-512 key agreement and AES-256-GCM.
+    - 'CLASSICAL': executes qeris_classical X25519 key agreement and AES-256-GCM.
+    - 'HYBRID': raises UnsupportedCryptoModeError (explicitly unsupported in this gateway).
+    - Any other mode: raises UnsupportedCryptoModeError.
 
-    Cryptographic Steps:
-    1. Receiver generates fresh ML-KEM-512 keypair (public_key, secret_key).
-    2. Sender encapsulates against public_key -> (ciphertext, sender_shared_secret).
-    3. Receiver decapsulates ciphertext using secret_key -> receiver_shared_secret.
-    4. Confirms sender_shared_secret == receiver_shared_secret.
-    5. Derives 32-byte session key using HKDF-SHA256 bound to (device_id, flow_id, sensitivity, policy_version).
-    6. Creates MessageEncryptor (sender) and MessageDecryptor (receiver) bound to authenticated AAD context.
+    Preconditions:
+    1. Dependencies for the requested mode must be available.
+    2. Context parameters must be non-empty and well-formed.
     """
-    if not _CRYPTO_AVAILABLE:
-        raise RuntimeError(f"S1 cryptography module is unavailable: {_IMPORT_ERROR}")
+    if not isinstance(mode, str):
+        raise CryptoPreconditionError("mode must be a string")
 
     normalized_mode = mode.strip().upper()
-    if normalized_mode not in ("PQC", "PQ"):
+
+    # Reject HYBRID explicitly
+    if normalized_mode == "HYBRID":
         raise UnsupportedCryptoModeError(
-            f"Cryptographic session establishment is only implemented for mode 'PQC' (ML-KEM-512 + HKDF-SHA256 + AES-256-GCM). "
-            f"Mode '{mode}' has no cryptographic implementation in this gateway prototype."
+            "Mode 'HYBRID' is explicitly unsupported in this gateway prototype. "
+            "Supported cryptographic modes are 'PQC' and 'CLASSICAL'."
         )
 
-    # Validate context parameters
+    # Validate common context parameters
     if not isinstance(device_id, str) or not device_id.strip():
         raise CryptoPreconditionError("device_id must be a non-empty string")
     if not isinstance(flow_id, str) or not flow_id.strip():
@@ -128,47 +156,75 @@ def establish_session(
     if type(policy_version) is not int or isinstance(policy_version, bool) or policy_version < 1:
         raise CryptoPreconditionError(f"policy_version must be an integer >= 1, got {policy_version!r}")
 
-    # 1. Receiver generates fresh ML-KEM-512 keypair
-    receiver_pub, receiver_sec = generate_keypair()
+    # --- Mode 1: Post-Quantum Cryptography (ML-KEM-512) ---
+    if normalized_mode in ("PQC", "PQ"):
+        if not _PQC_CRYPTO_AVAILABLE:
+            raise RuntimeError(f"S1 post-quantum cryptography module is unavailable: {_PQC_IMPORT_ERROR}")
 
-    # 2. Sender encapsulates to receiver's public key
-    kem_ciphertext, sender_secret = encapsulate(receiver_pub)
+        # 1. Receiver generates fresh ML-KEM-512 keypair
+        receiver_pub, receiver_sec = pqc_generate_keypair()
 
-    # 3. Receiver decapsulates ciphertext with secret key
-    receiver_secret = decapsulate(kem_ciphertext, receiver_sec)
+        # 2. Sender encapsulates to receiver's public key
+        kem_ciphertext, sender_secret = encapsulate(receiver_pub)
 
-    # 4. Confirm shared secret agreement
-    if sender_secret != receiver_secret:
-        raise CryptoPreconditionError("ML-KEM-512 shared secret agreement failure between sender and receiver")
+        # 3. Receiver decapsulates ciphertext with secret key
+        receiver_secret = decapsulate(kem_ciphertext, receiver_sec)
 
-    # 5. HKDF-SHA256 context-bound session key derivation
-    session_key = derive_session_key(
-        shared_secret=sender_secret,
-        device_id=device_id.strip(),
-        flow_id=flow_id.strip(),
-        sensitivity_tier=sensitivity.strip().upper(),
-        policy_version=policy_version,
-    )
+        # 4. Confirm shared secret agreement
+        if sender_secret != receiver_secret:
+            raise CryptoPreconditionError("ML-KEM-512 shared secret agreement failure between sender and receiver")
 
-    # 6. Bind AAD context to messages
-    context = MessageContext(
-        device_id=device_id.strip(),
-        flow_id=flow_id.strip(),
-        sensitivity_tier=sensitivity.strip().upper(),
-        policy_version=policy_version,
-    )
+        # 5. HKDF-SHA256 context-bound session key derivation
+        session_key = pqc_derive_session_key(
+            shared_secret=sender_secret,
+            device_id=device_id.strip(),
+            flow_id=flow_id.strip(),
+            sensitivity_tier=sensitivity.strip().upper(),
+            policy_version=policy_version,
+        )
 
-    # 7. Create encryptor and decryptor with persistent monotonic counter state
-    encryptor = MessageEncryptor(session_key, context)
-    decryptor = MessageDecryptor(session_key, context)
+        # 6. Bind AAD context to messages
+        context = PQCMessageContext(
+            device_id=device_id.strip(),
+            flow_id=flow_id.strip(),
+            sensitivity_tier=sensitivity.strip().upper(),
+            policy_version=policy_version,
+        )
 
-    return CryptoSession(
-        device_id=device_id.strip(),
-        flow_id=flow_id.strip(),
-        sensitivity=sensitivity.strip().upper(),
-        policy_version=policy_version,
-        mode=normalized_mode,
-        _encryptor=encryptor,
-        _decryptor=decryptor,
-        kem_ciphertext=kem_ciphertext,
-    )
+        # 7. Create encryptor and decryptor with persistent monotonic counter state
+        encryptor = PQCMessageEncryptor(session_key, context)
+        decryptor = PQCMessageDecryptor(session_key, context)
+
+        return CryptoSession(
+            device_id=device_id.strip(),
+            flow_id=flow_id.strip(),
+            sensitivity=sensitivity.strip().upper(),
+            policy_version=policy_version,
+            mode=normalized_mode,
+            key_exchange="ML-KEM-512",
+            _encryptor=encryptor,
+            _decryptor=decryptor,
+            kem_ciphertext=kem_ciphertext,
+        )
+
+    # --- Mode 2: Classical Cryptography (X25519) ---
+    elif normalized_mode == "CLASSICAL":
+        if not _CLASSICAL_AVAILABLE:
+            raise RuntimeError(f"Classical cryptography module is unavailable: {_CLASSICAL_IMPORT_ERROR}")
+
+        try:
+            return establish_classical_session(
+                device_id=device_id.strip(),
+                flow_id=flow_id.strip(),
+                sensitivity=sensitivity.strip().upper(),
+                policy_version=policy_version,
+                mode="CLASSICAL",
+            )
+        except (ClassicalPreconditionError, ValueError) as err:
+            raise CryptoPreconditionError(str(err)) from err
+
+    # --- Unknown / Unsupported Mode ---
+    else:
+        raise UnsupportedCryptoModeError(
+            f"Unsupported cryptographic mode: '{mode}'. Supported modes are 'PQC' and 'CLASSICAL'."
+        )

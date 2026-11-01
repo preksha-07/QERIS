@@ -10,5 +10,11 @@
         "minimum_mode": "HYBRID",
         "policy_version": 1,
         "authority_id": "QERIS-GATEWAY"
+    },
+    "telemetry_secure": {
+        "sensitivity": "CRITICAL",
+        "minimum_mode": "PQC",
+        "policy_version": 1,
+        "authority_id": "QERIS-GATEWAY"
     }
 }

@@ -1,17 +1,17 @@
 # QERIS: Sensitivity-Aware and Failure-Resilient Post-Quantum Migration Gateway
 
-[![Tests](https://img.shields.io/badge/tests-239%20passed-brightgreen.svg)]()
+[![Tests](https://img.shields.io/badge/tests-256%20passed-brightgreen.svg)]()
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)]()
-[![Cryptography](https://img.shields.io/badge/pqc-ML--KEM--512%20%7C%20ML--DSA--65-orange.svg)]()
+[![Cryptography](https://img.shields.io/badge/crypto-ML--KEM--512%20%7C%20ML--DSA--65%20%7C%20X25519-orange.svg)]()
 [![License](https://img.shields.io/badge/license-MIT-lightgrey.svg)]()
 
-QERIS is a modular, sensitivity-aware post-quantum migration gateway for IoT and telemetry systems. It balances security requirements against embedded physical constraints through failure-classified recovery, strict security floor enforcement, and context-bound post-quantum session encryption.
+QERIS is a modular, sensitivity-aware post-quantum migration gateway for IoT and telemetry systems. It balances security requirements against embedded physical constraints through failure-classified recovery, strict security floor enforcement, and context-bound cryptographic session encryption across both Post-Quantum (`ML-KEM-512`) and Classical (`X25519`) modes.
 
 ---
 
 ## Architecture Overview
 
-QERIS integrates four specialized subsystems into a single coherent backend:
+QERIS integrates four specialized subsystems plus the classical cryptography adapter into a single coherent backend:
 
 ```text
 [Client Endpoint / IoT Device]
@@ -28,7 +28,8 @@ QERIS integrates four specialized subsystems into a single coherent backend:
    │  & Recovery Logic   │      Replay Protection, Floor State Machine
    └──────────┬──────────┘
               │
-              ├──────► [ALLOW & PQC] ──► S1 Session Crypto (ML-KEM-512 + HKDF + AES-GCM)
+              ├──────► [ALLOW & PQC] ───────► S1 Session Crypto (ML-KEM-512 + HKDF + AES-GCM)
+              ├──────► [ALLOW & CLASSICAL] ─► Classical Crypto (X25519 + HKDF + AES-GCM)
               │
               ▼
    ┌─────────────────────┐
@@ -38,7 +39,8 @@ QERIS integrates four specialized subsystems into a single coherent backend:
 ```
 
 - **S1 (Cryptography & Device Engine):** ML-DSA-65 digital signatures, ML-KEM-512 key encapsulation, context-bound HKDF-SHA256 session key derivation, and AES-256-GCM authenticated message encryption.
-- **S2 (Gateway & Policy Engine):** FastAPI gateway, canonical 5-field policy contract validation, device capability evaluation, and security floor enforcement.
+- **Classical Crypto Add-on:** RFC 7748 X25519 key agreement with identical HKDF-SHA256 context binding and AES-256-GCM authenticated encryption.
+- **S2 (Gateway & Policy Engine):** FastAPI gateway, canonical 5-field policy contract validation, device capability evaluation, dual-mode crypto adapter, and security floor enforcement.
 - **S3 (Security & Recovery Logic):** 4-class failure taxonomy, monotonic replay protection with fast-forward bounds, downgrade rejection, and bounded recovery controller.
 - **S4 (Data Science & Analytics):** Gateway log bridge, fault injection simulation, comparative baseline strategies, and statistical evaluation (Wilson intervals, confusion matrices).
 
@@ -69,7 +71,7 @@ Policies are decoupled from cryptographic signatures via `SignedPolicyEnvelope` 
 & "..\.venv\Scripts\Activate.ps1"
 python -m pytest -v
 ```
-**Test Results:** All 239 tests (S1: 55, S3: 103, S4: 70, E2E: 11) pass with zero failures.
+**Test Results:** All 256 tests (S1: 55, S3: 103, S4: 70, Classical Add-on & E2E: 28) pass with zero failures.
 
 ### 2. Launch Gateway Server
 ```powershell

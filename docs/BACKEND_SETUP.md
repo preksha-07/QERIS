@@ -82,13 +82,14 @@ QERIS/
 Execute all test suites from the repository root:
 
 ```bash
-# Run the entire repository test suite (239 tests total)
+# Run the entire repository test suite (256 tests total)
 python -m pytest -v
 
 # Run individual subsystem suites
 python -m pytest qeris/s1/ -v
 python -m pytest qeris/s3/ -v
 python -m pytest qeris/s4/ -v
+python -m pytest qeris_classical_addon/ -v
 python -m pytest tests/test_backend_integration.py -v
 ```
 
@@ -115,7 +116,7 @@ curl -s http://localhost:8000/health | jq .
 ```json
 {
   "status": "HEALTHY",
-  "verified_flows": ["emergency_stop", "temperature_01"],
+  "verified_flows": ["emergency_stop", "telemetry_secure", "temperature_01"],
   "authority_id": "QERIS-GATEWAY",
   "persisted_policy_version": 1,
   "registered_devices": ["device_001", "device_002", "device_003"]
@@ -145,11 +146,11 @@ curl -X POST http://localhost:8000/check-flow \
 ```
 
 ### 5.3 Downgrade Rejection Check
-Attempt to negotiate CLASSICAL on a flow requiring HYBRID:
+Attempt to negotiate CLASSICAL on a flow requiring PQC:
 ```bash
 curl -X POST http://localhost:8000/check-flow \
   -H "Content-Type: application/json" \
-  -d '{"device_id": "device_001", "flow_id": "emergency_stop", "requested_mode": "CLASSICAL"}'
+  -d '{"device_id": "device_002", "flow_id": "telemetry_secure", "requested_mode": "CLASSICAL"}'
 ```
 **Response:**
 ```json
@@ -161,11 +162,27 @@ curl -X POST http://localhost:8000/check-flow \
 }
 ```
 
-### 5.4 Post-Quantum Cryptographic Roundtrip (`POST /crypto-demo`)
+### 5.4 Classical Cryptographic Roundtrip (`POST /crypto-demo`)
 ```bash
 curl -X POST http://localhost:8000/crypto-demo \
   -H "Content-Type: application/json" \
-  -d '{"device_id": "device_002", "flow_id": "temperature_01", "message": "Telemetry: 24.5 C", "requested_mode": "PQC"}'
+  -d '{"device_id": "device_001", "flow_id": "temperature_01", "message": "Telemetry: 21.0 C", "requested_mode": "CLASSICAL"}'
+```
+**Response:**
+```json
+{
+  "decision": "ALLOW",
+  "crypto_suite": "X25519 + HKDF-SHA256 + AES-256-GCM",
+  "decrypted_message": "Telemetry: 21.0 C",
+  "crypto_status": "VERIFIED_ROUNDTRIP"
+}
+```
+
+### 5.5 Post-Quantum Cryptographic Roundtrip (`POST /crypto-demo`)
+```bash
+curl -X POST http://localhost:8000/crypto-demo \
+  -H "Content-Type: application/json" \
+  -d '{"device_id": "device_002", "flow_id": "telemetry_secure", "message": "Telemetry: 24.5 C", "requested_mode": "PQC"}'
 ```
 **Response:**
 ```json
