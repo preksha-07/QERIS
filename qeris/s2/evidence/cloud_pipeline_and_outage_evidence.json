@@ -1,0 +1,31 @@
+{
+  "online_telemetry_submission": {
+    "status": "ACCEPTED",
+    "event_id": "509f8f57-6ed3-4f7c-a858-1fe4b67a48f6",
+    "device_id": "dev_hybrid_01",
+    "flow_id": "emergency_stop",
+    "sensitivity": "CRITICAL",
+    "cloud_delivery": "FORWARDED_TO_CLOUD",
+    "queue_size": 0,
+    "baseline_mode": "full_gateway",
+    "run_id": null
+  },
+  "cloud_db_record_count": {
+    "total_records": 1,
+    "breakdown": [
+      {
+        "flow_id": "emergency_stop",
+        "sensitivity": "CRITICAL",
+        "count": 1
+      }
+    ]
+  },
+  "outage_buffer_nature": "memory_only_bounded_fifo",
+  "outage_simulation": {
+    "msg1_status": "QUEUED_FOR_CLOUD",
+    "msg2_status": "QUEUED_FOR_CLOUD",
+    "msg3_overflow_status": "CLOUD_DROPPED_QUEUE_FULL",
+    "queue_size": 2,
+    "dropped_count": 1
+  }
+}

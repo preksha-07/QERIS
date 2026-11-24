@@ -1,11 +1,76 @@
 {
-    "device_001": {
-        "supported_modes": ["CLASSICAL", "HYBRID"]
-    },
-    "device_002": {
-        "supported_modes": ["CLASSICAL", "HYBRID", "PQC"]
-    },
-    "device_003": {
-        "supported_modes": ["CLASSICAL"]
-    }
+  "device_001": {
+    "device_id": "device_001",
+    "device_class": "esp32_constrained",
+    "supported_modes": ["CLASSICAL", "HYBRID"],
+    "supported_security_profiles": [
+      "CLASSICAL_ECDH_AESGCM",
+      "HYBRID_X25519_MLKEM_AESGCM"
+    ],
+    "ml_kem_capable": true,
+    "ml_dsa_capable": false,
+    "memory_class": "LOW_RAM_320KB",
+    "ram_bytes_available": 327680,
+    "max_packet_size_mtu": 1280,
+    "firmware_version": "v1.0.0",
+    "quarantined": false,
+    "quarantine_reason": null,
+    "migration_status": "MIGRATING"
+  },
+  "device_002": {
+    "device_id": "device_002",
+    "device_class": "edge_gateway",
+    "supported_modes": ["CLASSICAL", "HYBRID", "PQC"],
+    "supported_security_profiles": [
+      "CLASSICAL_ECDH_AESGCM",
+      "HYBRID_X25519_MLKEM_AESGCM",
+      "PQC_MLKEM512_AESGCM",
+      "PQC_MLKEM768_AESGCM"
+    ],
+    "ml_kem_capable": true,
+    "ml_dsa_capable": true,
+    "memory_class": "MEDIUM_RAM_1MB",
+    "ram_bytes_available": 1048576,
+    "max_packet_size_mtu": 1500,
+    "firmware_version": "v2.1.0",
+    "quarantined": false,
+    "quarantine_reason": null,
+    "migration_status": "PQC_READY"
+  },
+  "device_003": {
+    "device_id": "device_003",
+    "device_class": "esp32_constrained",
+    "supported_modes": ["CLASSICAL"],
+    "supported_security_profiles": [
+      "CLASSICAL_ECDH_AESGCM"
+    ],
+    "ml_kem_capable": false,
+    "ml_dsa_capable": false,
+    "memory_class": "LOW_RAM_320KB",
+    "ram_bytes_available": 65536,
+    "max_packet_size_mtu": 512,
+    "firmware_version": "v0.9.1",
+    "quarantined": false,
+    "quarantine_reason": null,
+    "migration_status": "LEGACY"
+  },
+  "dev_esp32_constrained_01": {
+    "device_id": "dev_esp32_constrained_01",
+    "device_class": "esp32_constrained",
+    "supported_modes": ["CLASSICAL", "HYBRID", "PQC"],
+    "supported_security_profiles": [
+      "CLASSICAL_ECDH_AESGCM",
+      "HYBRID_X25519_MLKEM_AESGCM",
+      "PQC_MLKEM512_AESGCM"
+    ],
+    "ml_kem_capable": true,
+    "ml_dsa_capable": false,
+    "memory_class": "LOW_RAM_320KB",
+    "ram_bytes_available": 327680,
+    "max_packet_size_mtu": 1280,
+    "firmware_version": "v1.4.2",
+    "quarantined": false,
+    "quarantine_reason": null,
+    "migration_status": "MIGRATING"
+  }
 }

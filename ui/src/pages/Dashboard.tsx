@@ -8,14 +8,26 @@ import {
   CheckCircle,
   ArrowDown,
   Lock,
+  Radio,
+  RefreshCw,
+  Key,
 } from 'lucide-react';
 import { StatCard } from '../components/StatCard';
 import { SecurityEventCard } from '../components/SecurityEvent';
 import { FlowTable } from '../components/FlowTable';
 import { FlowDetailModal } from '../components/FlowDetailModal';
-import { getAuditLogs, getSecurityEvents } from '../services/api';
+import {
+  getAuditLogs,
+  getSecurityEvents,
+  getGatewayStatus,
+  getBaselineMode,
+  setBaselineMode,
+  resetGatewayState,
+  setAdminApiKey,
+  getAdminApiKey,
+} from '../services/api';
 import { computeStats } from '../data/mockData';
-import type { AuditLog, SecurityEvent } from '../types/qeris';
+import type { AuditLog, SecurityEvent, GatewayStatus, BaselineConfig } from '../types/qeris';
 import {
   PieChart,
   Pie,
@@ -34,19 +46,89 @@ const DECISION_COLORS: Record<string, string> = {
   FLOOR_UNREACHABLE: '#f59e0b',
 };
 
+const BASELINES = [
+  { id: 'static_classical', label: 'B1: Static Classical' },
+  { id: 'static_hybrid', label: 'B2: Static Hybrid' },
+  { id: 'static_pqc', label: 'B3: Static PQC' },
+  { id: 'sensitivity_only', label: 'B4: Sensitivity-Only' },
+  { id: 'downgrade_on_failure', label: 'B5: Downgrade-on-Failure' },
+  { id: 'static_retry_with_floor', label: 'B6: Static Retry with Floor' },
+  { id: 'full_gateway', label: 'B7: Full QERIS' },
+];
+
 export const Dashboard: React.FC<DashboardProps> = ({ gatewayOnline }) => {
   const [logs, setLogs] = useState<AuditLog[]>([]);
   const [events, setEvents] = useState<SecurityEvent[]>([]);
   const [selectedLog, setSelectedLog] = useState<AuditLog | null>(null);
+  const [isLogsMocked, setIsLogsMocked] = useState<boolean>(true);
+
+  // Gateway operational state
+  const [gwStatus, setGwStatus] = useState<GatewayStatus | null>(null);
+  const [baselineConfig, setBaselineConfig] = useState<BaselineConfig | null>(null);
+  const [selectedBaseline, setSelectedBaseline] = useState<string>('full_gateway');
+  const [baselineUpdating, setBaselineUpdating] = useState<boolean>(false);
+  const [statusMessage, setStatusMessage] = useState<string | null>(null);
+
+  // Admin key UI control
+  const [adminKeyInput, setAdminKeyInput] = useState<string>(getAdminApiKey());
+  const [showAdminKeyBox, setShowAdminKeyBox] = useState<boolean>(false);
+
+  const refreshData = async () => {
+    const { data: logData, mocked: logMocked } = await getAuditLogs();
+    setLogs(logData);
+    setIsLogsMocked(logMocked);
+
+    const { data: evtData } = await getSecurityEvents();
+    setEvents(evtData);
+
+    const status = await getGatewayStatus();
+    setGwStatus(status);
+
+    const { data: baseCfg } = await getBaselineMode();
+    setBaselineConfig(baseCfg);
+    if (baseCfg.baseline_mode) {
+      setSelectedBaseline(baseCfg.baseline_mode);
+    }
+  };
 
   useEffect(() => {
-    getAuditLogs().then(({ data }) => setLogs(data));
-    getSecurityEvents().then(({ data }) => setEvents(data));
+    refreshData();
+    const interval = setInterval(refreshData, 10000);
+    return () => clearInterval(interval);
   }, []);
+
+  const handleBaselineChange = async () => {
+    setBaselineUpdating(true);
+    setStatusMessage(null);
+    const res = await setBaselineMode(selectedBaseline);
+    setBaselineUpdating(false);
+
+    if (res.success && res.data) {
+      setBaselineConfig(res.data);
+      setStatusMessage(`Baseline mode successfully updated to ${selectedBaseline}`);
+      await refreshData();
+    } else {
+      setStatusMessage(res.error || 'Failed to update baseline (Admin credentials required)');
+    }
+  };
+
+  const handleAdminKeySave = () => {
+    setAdminApiKey(adminKeyInput);
+    setStatusMessage('Admin API key updated for current UI session.');
+    refreshData();
+  };
+
+  const handleResetState = async () => {
+    if (!window.confirm('Reset gateway experiment state (rate limits, sessions, and cloud queue)?')) {
+      return;
+    }
+    const res = await resetGatewayState();
+    setStatusMessage(res.message);
+    await refreshData();
+  };
 
   const stats = computeStats(logs);
 
-  // Pie chart data
   const pieData = [
     { name: 'ALLOW', value: stats.allowed },
     { name: 'REJECT', value: stats.blocked },
@@ -57,25 +139,231 @@ export const Dashboard: React.FC<DashboardProps> = ({ gatewayOnline }) => {
     <div>
       {/* Page Header */}
       <div className="page-header">
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
           <div>
             <h1 className="page-title">Security Gateway</h1>
             <p className="page-subtitle">
-              Real-time overview of QERIS gateway activity
+              Real-time overview of QERIS gateway activity and baseline enforcement
             </p>
           </div>
-          <div
-            className={`gateway-banner ${gatewayOnline ? 'online' : 'offline'}`}
-          >
-            <span
-              className={`status-dot ${gatewayOnline ? 'online' : 'offline'}`}
-            />
-            GATEWAY {gatewayOnline ? 'ONLINE' : 'OFFLINE'}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span className={isLogsMocked ? 'mock-badge' : 'live-badge'}>
+              {!gatewayOnline
+                ? 'GATEWAY OFFLINE (SAMPLE DATA)'
+                : isLogsMocked
+                  ? 'LIVE GATEWAY (DEMO LOGS - SET ADMIN KEY)'
+                  : 'LIVE GATEWAY & AUDIT LOGS'}
+            </span>
+            <div className={`gateway-banner ${gatewayOnline ? 'online' : 'offline'}`}>
+              <span className={`status-dot ${gatewayOnline ? 'online' : 'offline'}`} />
+              GATEWAY {gatewayOnline ? 'ONLINE' : 'OFFLINE'}
+            </div>
           </div>
         </div>
       </div>
 
       <div className="page-body">
+        {/* ── Gateway Operational State & Baseline Control Panel ───────────────── */}
+        <div className="card section" style={{ borderLeft: '4px solid var(--accent-cyan)' }}>
+          <div className="card-header">
+            <span className="card-title">
+              <Radio size={14} color="var(--accent-cyan)" />
+              Gateway Operational State & Baseline Configuration
+            </span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <button
+                onClick={() => setShowAdminKeyBox(!showAdminKeyBox)}
+                style={{
+                  background: 'none',
+                  border: '1px solid var(--border)',
+                  color: 'var(--text-secondary)',
+                  padding: '3px 8px',
+                  borderRadius: 4,
+                  fontSize: 11,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 4,
+                }}
+              >
+                <Key size={11} />
+                {adminKeyInput ? 'Admin Key Configured' : 'Set Admin Key'}
+              </button>
+              <button
+                onClick={handleResetState}
+                style={{
+                  background: 'none',
+                  border: '1px solid rgba(239, 68, 68, 0.3)',
+                  color: 'var(--red)',
+                  padding: '3px 8px',
+                  borderRadius: 4,
+                  fontSize: 11,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 4,
+                }}
+              >
+                <RefreshCw size={11} />
+                Reset State
+              </button>
+            </div>
+          </div>
+
+          <div className="card-body">
+            {showAdminKeyBox && (
+              <div
+                style={{
+                  padding: '10px 14px',
+                  background: 'rgba(255, 255, 255, 0.02)',
+                  border: '1px solid var(--border)',
+                  borderRadius: 6,
+                  marginBottom: 14,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 10,
+                }}
+              >
+                <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Admin API Key:</span>
+                <input
+                  type="password"
+                  placeholder="Enter QERIS_ADMIN_API_KEY..."
+                  value={adminKeyInput}
+                  onChange={(e) => setAdminKeyInput(e.target.value)}
+                  style={{
+                    flex: 1,
+                    background: 'var(--bg-base)',
+                    border: '1px solid var(--border)',
+                    borderRadius: 4,
+                    padding: '4px 8px',
+                    color: 'var(--text-primary)',
+                    fontSize: 12,
+                  }}
+                />
+                <button
+                  onClick={handleAdminKeySave}
+                  style={{
+                    background: 'var(--accent-cyan)',
+                    color: '#000',
+                    border: 'none',
+                    borderRadius: 4,
+                    padding: '4px 10px',
+                    fontSize: 12,
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                  }}
+                >
+                  Save
+                </button>
+              </div>
+            )}
+
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                gap: 16,
+                marginBottom: 14,
+              }}
+            >
+              <div>
+                <span style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginBottom: 2 }}>
+                  ACTIVE BASELINE
+                </span>
+                <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--accent-cyan)' }}>
+                  {baselineConfig?.baseline_mode ?? gwStatus?.baseline_mode ?? 'full_gateway'}
+                </span>
+                <span style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginTop: 2 }}>
+                  Frozen RFC 8785 execution model
+                </span>
+              </div>
+
+              <div>
+                <span style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginBottom: 2 }}>
+                  ACTIVE POLICY VERSION
+                </span>
+                <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--green)' }}>
+                  v{gwStatus?.active_policy_version ?? 1} (Signed ML-DSA-65)
+                </span>
+                <span style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginTop: 2 }}>
+                  Monotonic anti-rollback verified
+                </span>
+              </div>
+
+              <div>
+                <span style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginBottom: 2 }}>
+                  CLOUD FORWARDING & OUTAGE BUFFER
+                </span>
+                <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>
+                  Queue: {gwStatus?.cloud_queue_size ?? 0} | Dropped: {gwStatus?.cloud_dropped_count ?? 0}
+                </span>
+                <span style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginTop: 2 }}>
+                  TLS verification enforced
+                </span>
+              </div>
+
+              <div>
+                <span style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginBottom: 2 }}>
+                  SWITCH BASELINE MODE
+                </span>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <select
+                    value={selectedBaseline}
+                    onChange={(e) => setSelectedBaseline(e.target.value)}
+                    style={{
+                      background: 'var(--bg-base)',
+                      border: '1px solid var(--border)',
+                      borderRadius: 4,
+                      color: 'var(--text-primary)',
+                      padding: '4px 8px',
+                      fontSize: 12,
+                      flex: 1,
+                    }}
+                  >
+                    {BASELINES.map((b) => (
+                      <option key={b.id} value={b.id}>
+                        {b.label}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    onClick={handleBaselineChange}
+                    disabled={baselineUpdating}
+                    style={{
+                      background: 'var(--accent-cyan)',
+                      color: '#000',
+                      border: 'none',
+                      borderRadius: 4,
+                      padding: '4px 10px',
+                      fontSize: 12,
+                      fontWeight: 600,
+                      cursor: baselineUpdating ? 'not-allowed' : 'pointer',
+                    }}
+                  >
+                    {baselineUpdating ? 'Applying...' : 'Apply'}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {statusMessage && (
+              <div
+                style={{
+                  fontSize: 12,
+                  padding: '6px 10px',
+                  background: 'rgba(6, 182, 212, 0.08)',
+                  border: '1px solid rgba(6, 182, 212, 0.2)',
+                  borderRadius: 4,
+                  color: 'var(--accent-cyan)',
+                  marginTop: 8,
+                }}
+              >
+                {statusMessage}
+              </div>
+            )}
+          </div>
+        </div>
+
         {/* Stat Cards */}
         <div className="stat-cards section">
           <StatCard

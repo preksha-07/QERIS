@@ -3,10 +3,10 @@ import { Activity, Play, Search } from 'lucide-react';
 import { FlowTable } from '../components/FlowTable';
 import { FlowDetailModal } from '../components/FlowDetailModal';
 import { SecurityEventCard } from '../components/SecurityEvent';
-import { getAuditLogs, getSecurityEvents, checkFlow, checkFlowMock } from '../services/api';
+import { getAuditLogs, getSecurityEvents, checkFlow, checkFlowMock, getDevices, getPolicies } from '../services/api';
 import { demoScenarios } from '../data/mockData';
 import { mockDevices, mockPolicies } from '../data/mockData';
-import type { AuditLog, FlowResponse, SecurityEvent, SecurityMode } from '../types/qeris';
+import type { AuditLog, FlowResponse, SecurityEvent, SecurityMode, Device, Policy } from '../types/qeris';
 import { DecisionBadge, ModeBadge, SensitivityBadge } from '../components/SecurityBadge';
 
 const SECURITY_MODES: SecurityMode[] = ['CLASSICAL', 'HYBRID', 'PQC'];
@@ -29,10 +29,18 @@ export const Flows: React.FC = () => {
   const [customResult, setCustomResult] = useState<FlowResponse | null>(null);
   const [customLoading, setCustomLoading] = useState(false);
   const [customMocked, setCustomMocked] = useState(false);
+  const [devices, setDevices] = useState<Device[]>(mockDevices);
+  const [policies, setPolicies] = useState<Policy[]>(mockPolicies);
 
   useEffect(() => {
     getAuditLogs().then(({ data }) => setLogs(data));
     getSecurityEvents().then(({ data }) => setEvents(data));
+    getDevices().then(({ data }) => {
+      if (data && data.length > 0) setDevices(data);
+    });
+    getPolicies().then(({ data }) => {
+      if (data && data.length > 0) setPolicies(data);
+    });
   }, []);
 
   // ── Demo scenario runner ──────────────────────────────────────────────────
@@ -116,8 +124,10 @@ export const Flows: React.FC = () => {
               <Search size={14} color="var(--accent-cyan)" />
               Flow Check
             </span>
-            {customMocked && customResult && (
-              <span className="mock-badge">MOCK</span>
+            {customResult && (
+              <span className={customMocked ? "mock-badge" : "live-badge"}>
+                {customMocked ? "OFFLINE MOCK" : "LIVE GATEWAY"}
+              </span>
             )}
           </div>
           <div className="card-body">
@@ -158,7 +168,7 @@ export const Flows: React.FC = () => {
                     cursor: 'pointer',
                   }}
                 >
-                  {mockDevices.map((d) => (
+                  {devices.map((d) => (
                     <option key={d.device_id} value={d.device_id}>
                       {d.device_id}
                     </option>
@@ -189,7 +199,7 @@ export const Flows: React.FC = () => {
                     cursor: 'pointer',
                   }}
                 >
-                  {mockPolicies.map((p) => (
+                  {policies.map((p) => (
                     <option key={p.flow_id} value={p.flow_id}>
                       {p.flow_id}
                     </option>
@@ -337,6 +347,22 @@ export const Flows: React.FC = () => {
                       {customResult.authority_id ?? '—'}
                     </span>
                   </div>
+                  {customResult.s3_verdict && (
+                    <div className="modal-row">
+                      <span className="modal-key">S3 Verdict</span>
+                      <span className="modal-val" style={{ color: 'var(--accent-cyan)' }}>
+                        {customResult.s3_verdict}
+                      </span>
+                    </div>
+                  )}
+                  {customResult.baseline_mode && (
+                    <div className="modal-row">
+                      <span className="modal-key">Baseline</span>
+                      <span className="modal-val" style={{ color: 'var(--text-secondary)' }}>
+                        {customResult.baseline_mode}
+                      </span>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -384,8 +410,10 @@ export const Flows: React.FC = () => {
                 <Activity size={14} color="var(--accent-cyan)" />
                 Gateway Response
               </span>
-              {liveMocked && liveResult && (
-                <span className="mock-badge">MOCK</span>
+              {liveResult && (
+                <span className={liveMocked ? "mock-badge" : "live-badge"}>
+                  {liveMocked ? "OFFLINE MOCK" : "LIVE GATEWAY"}
+                </span>
               )}
             </div>
             <div className="card-body">

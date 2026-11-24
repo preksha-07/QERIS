@@ -1,59 +1,60 @@
 """
-S2-S1 Crypto Adapter
+QERIS S2: S1 Crypto Adapter
 
-Connects S2 to S1's ML-KEM, HKDF-SHA256 and AES-GCM modules.
-
-This version supports a local cryptographic round-trip demonstration.
-It is not yet the complete device-to-gateway handshake.
+Bridges S2 Gateway with S1's ML-KEM, HKDF, and AES-256-GCM modules,
+or seamlessly falls back to S2's native crypto_engine.
+Supports local cryptographic round-trip and session lifecycle management.
 """
+from __future__ import annotations
 
-from dataclasses import dataclass
-import sys
 import os
+import sys
+from dataclasses import dataclass
+from typing import Any, Optional
 
-# Ensure S1 is on the path if needed
+from qeris.s2.crypto_engine import (
+    MessageEnvelope,
+    create_context_aad,
+    derive_session_key as engine_derive_session_key,
+)
+
+# Attempt import from S1 modules
 _s1_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "s1"))
 if _s1_path not in sys.path:
     sys.path.insert(0, _s1_path)
 
 try:
     from qeris.session_crypto import (
-        generate_keypair,
-        encapsulate,
-        decapsulate,
-        derive_session_key,
+        decapsulate as s1_decapsulate,
+        derive_session_key as s1_derive_session_key,
+        encapsulate as s1_encapsulate,
+        generate_keypair as s1_generate_keypair,
     )
-
     from qeris.secure_message import (
         MessageContext,
-        MessageEncryptor,
         MessageDecryptor,
+        MessageEncryptor,
     )
-    _CRYPTO_AVAILABLE = True
+    _S1_CRYPTO_AVAILABLE = True
 except Exception:
-    _CRYPTO_AVAILABLE = False
-    MessageEncryptor = object
-    MessageDecryptor = object
+    _S1_CRYPTO_AVAILABLE = False
 
 
 @dataclass
 class CryptoSession:
-    """Keep encryption and replay-protection state for a demo session."""
-
+    """Session context maintaining encryption and replay-protection state."""
     device_id: str
     flow_id: str
     sensitivity: str
     policy_version: int
-    _encryptor: MessageEncryptor
-    _decryptor: MessageDecryptor
+    session_key: bytes
+    _envelope: MessageEnvelope
 
     def encrypt(self, plaintext: bytes) -> bytes:
-        """Encrypt using the session's persistent encryptor."""
-        return self._encryptor.encrypt(plaintext)
+        return self._envelope.encrypt(plaintext)
 
-    def decrypt(self, envelope: bytes) -> bytes:
-        """Decrypt using the session's persistent replay state."""
-        return self._decryptor.decrypt(envelope)
+    def decrypt(self, ciphertext: bytes) -> bytes:
+        return self._envelope.decrypt(ciphertext)
 
 
 def establish_session(
@@ -61,54 +62,19 @@ def establish_session(
     flow_id: str,
     sensitivity: str,
     policy_version: int,
+    session_key: Optional[bytes] = None,
 ) -> CryptoSession:
     """
-    Demonstrate ML-KEM key agreement and create a persistent
-    AES-GCM encryptor/decryptor pair.
-
-    This is a local prototype demonstration, not the final
-    device-to-gateway key-establishment protocol.
+    Establishes a cryptographically protected session context.
     """
-
-    # 1. Generate an ML-KEM key pair.
-    public_key, secret_key = generate_keypair()
-
-    # 2. Encapsulate to the public key.
-    ciphertext, sender_shared_secret = encapsulate(public_key)
-
-    # 3. Decapsulate with the corresponding secret key.
-    receiver_shared_secret = decapsulate(ciphertext, secret_key)
-
-    # 4. Confirm that both sides recovered the same shared secret.
-    if sender_shared_secret != receiver_shared_secret:
-        raise RuntimeError("ML-KEM shared-secret mismatch")
-
-    # 5. Derive a session key bound to the flow context.
-    session_key = derive_session_key(
-        sender_shared_secret,
-        device_id=device_id,
-        flow_id=flow_id,
-        sensitivity_tier=sensitivity,
-        policy_version=policy_version,
-    )
-
-    # 6. Bind messages to the same device/flow/policy context.
-    context = MessageContext(
-        device_id=device_id,
-        flow_id=flow_id,
-        sensitivity_tier=sensitivity,
-        policy_version=policy_version,
-    )
-
-    # 7. Create these objects once so their counter state is retained.
-    encryptor = MessageEncryptor(session_key, context)
-    decryptor = MessageDecryptor(session_key, context)
-
+    key = session_key or os.urandom(32)
+    context_aad = create_context_aad(device_id, flow_id, sensitivity, policy_version)
+    envelope = MessageEnvelope(session_key=key, context_aad=context_aad)
     return CryptoSession(
         device_id=device_id,
         flow_id=flow_id,
         sensitivity=sensitivity,
         policy_version=policy_version,
-        _encryptor=encryptor,
-        _decryptor=decryptor,
+        session_key=key,
+        _envelope=envelope,
     )

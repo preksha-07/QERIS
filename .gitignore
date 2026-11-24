@@ -38,3 +38,28 @@ htmlcov/
 
 # macOS system files
 .DS_Store
+
+# Environment variables and secrets
+.env
+.env.local
+.env.*.local
+qeris/s2/.authority_keys/
+
+# SQLite databases & WAL logs
+*.db
+*.db-wal
+*.db-shm
+
+# Runtime audit logs
+qeris/s2/gateway_audit.jsonl
+
+# Node & UI build artifacts
+ui/node_modules/
+ui/dist/
+ui/.env.local
+ui/.env.*.local
+
+# Scratch and temporary scripts
+scratch/
+
+

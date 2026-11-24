@@ -1,0 +1,63 @@
+{
+  "case_a_pqc_allowed": {
+    "decision": "ALLOW",
+    "reason": "allow:all_checks_passed",
+    "baseline_mode": "full_gateway",
+    "run_id": null,
+    "scenario": null,
+    "device_id": "dev_hybrid_01",
+    "flow_id": "emergency_stop",
+    "sensitivity": "CRITICAL",
+    "minimum_mode": "PQC",
+    "approved_security_profiles": [
+      "PQC_MLKEM512_AESGCM"
+    ],
+    "selected_security_profile": "PQC_MLKEM512_AESGCM",
+    "policy_version": 3,
+    "policy_digest": "6a89e6cf7dd4f663be3701cbd37c86aefa1a9d204e0f0f48d3ffff3b11daec1e",
+    "authority_id": "QERIS-GATEWAY",
+    "readiness": {
+      "status": "PARTIALLY_READY",
+      "feasible_profiles": [
+        "PQC_MLKEM512_AESGCM"
+      ],
+      "recommended_profile": "PQC_MLKEM512_AESGCM",
+      "reasons": [
+        "Handshake wire size (1820 B) exceeds MTU (1500 B); fragmentation required"
+      ],
+      "requires_fragmentation": true,
+      "estimated_wire_size": 1820
+    },
+    "adaptive_recovery": true,
+    "floor_violation": false,
+    "s3_verdict": "NONE"
+  },
+  "case_b_classical_downgrade_blocked": {
+    "decision": "REJECT",
+    "reason": "Requested mode 'CLASSICAL' (rank 1) is below signed security floor 'PQC' (rank 3)",
+    "baseline_mode": "full_gateway",
+    "run_id": null,
+    "scenario": null,
+    "sensitivity": "CRITICAL",
+    "minimum_mode": "PQC",
+    "policy_version": 3,
+    "policy_digest": "6a89e6cf7dd4f663be3701cbd37c86aefa1a9d204e0f0f48d3ffff3b11daec1e",
+    "adaptive_recovery": true,
+    "floor_violation": false,
+    "s3_verdict": "DISCARD_AND_LOG"
+  },
+  "case_c_device_label_override_blocked": {
+    "decision": "REJECT",
+    "reason": "Requested mode 'CLASSICAL' (rank 1) is below signed security floor 'PQC' (rank 3)",
+    "baseline_mode": "full_gateway",
+    "run_id": null,
+    "scenario": null,
+    "sensitivity": "CRITICAL",
+    "minimum_mode": "PQC",
+    "policy_version": 3,
+    "policy_digest": "6a89e6cf7dd4f663be3701cbd37c86aefa1a9d204e0f0f48d3ffff3b11daec1e",
+    "adaptive_recovery": true,
+    "floor_violation": false,
+    "s3_verdict": "DISCARD_AND_LOG"
+  }
+}

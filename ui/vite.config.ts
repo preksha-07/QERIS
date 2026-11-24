@@ -7,12 +7,19 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      // Proxy API calls to the FastAPI gateway running on port 8000
-      '/api': {
-        target: 'http://localhost:8000',
-        changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api/, ''),
-      },
+      '/check-flow': { target: 'http://localhost:8000', changeOrigin: true },
+      '/health': { target: 'http://localhost:8000', changeOrigin: true },
+      '/api/v1/cloud': { target: 'https://localhost:8001', changeOrigin: true, secure: false },
+      '/api/v1': { target: 'http://localhost:8000', changeOrigin: true },
+    },
+  },
+  preview: {
+    port: 5173,
+    proxy: {
+      '/check-flow': { target: 'http://localhost:8000', changeOrigin: true },
+      '/health': { target: 'http://localhost:8000', changeOrigin: true },
+      '/api/v1/cloud': { target: 'https://localhost:8001', changeOrigin: true, secure: false },
+      '/api/v1': { target: 'http://localhost:8000', changeOrigin: true },
     },
   },
 })

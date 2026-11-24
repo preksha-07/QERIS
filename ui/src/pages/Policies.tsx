@@ -7,9 +7,13 @@ import { ModeBadge, SensitivityBadge } from '../components/SecurityBadge';
 
 export const Policies: React.FC = () => {
   const [policies, setPolicies] = useState<Policy[]>([]);
+  const [isMocked, setIsMocked] = useState<boolean>(true);
 
   useEffect(() => {
-    getPolicies().then(({ data }) => setPolicies(data));
+    getPolicies().then(({ data, mocked }) => {
+      setPolicies(data);
+      setIsMocked(mocked);
+    });
   }, []);
 
   return (
@@ -116,7 +120,9 @@ export const Policies: React.FC = () => {
               <FileText size={14} color="var(--accent-cyan)" />
               Policy Summary Table
             </span>
-            <span className="mock-badge">DEMO DATA</span>
+            <span className={isMocked ? "mock-badge" : "live-badge"}>
+              {isMocked ? "DEMO DATA" : "LIVE POLICIES"}
+            </span>
           </div>
           <div style={{ overflowX: 'auto' }}>
             <table className="data-table">

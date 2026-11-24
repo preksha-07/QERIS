@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { Cpu, AlertTriangle, Radio, Lock, Unlock } from 'lucide-react';
 import { DeviceTable } from '../components/DeviceTable';
-import { getDevices, simulateTransmission } from '../services/api';
+import { getDevices, getPolicies, simulateTransmission } from '../services/api';
 import { mockPolicies, mockDevices } from '../data/mockData';
-import type { Device, SecurityMode, TransmissionResult } from '../types/qeris';
+import type { Device, SecurityMode, TransmissionResult, Policy } from '../types/qeris';
 import { SECURITY_LEVEL } from '../types/qeris';
 import {
   DecisionBadge,
@@ -49,6 +49,8 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
 
 export const Devices: React.FC = () => {
   const [devices, setDevices] = useState<Device[]>([]);
+  const [isDevicesMocked, setIsDevicesMocked] = useState<boolean>(true);
+  const [policies, setPolicies] = useState<Policy[]>(mockPolicies);
 
   // ── Simulation state ─────────────────────────────────────────────────────
   const [simDevice, setSimDevice] = useState<string>(mockDevices[0].device_id);
@@ -60,7 +62,13 @@ export const Devices: React.FC = () => {
   const [simMocked, setSimMocked]  = useState(false);
 
   useEffect(() => {
-    getDevices().then(({ data }) => setDevices(data));
+    getDevices().then(({ data, mocked }) => {
+      if (data && data.length > 0) setDevices(data);
+      setIsDevicesMocked(mocked);
+    });
+    getPolicies().then(({ data }) => {
+      if (data && data.length > 0) setPolicies(data);
+    });
   }, []);
 
   // When device changes, reset mode to the first mode that device supports
@@ -157,7 +165,7 @@ export const Devices: React.FC = () => {
                   onChange={(e) => handleDeviceChange(e.target.value)}
                   style={SELECT_STYLE}
                 >
-                  {mockDevices.map((d) => (
+                  {(devices.length > 0 ? devices : mockDevices).map((d) => (
                     <option key={d.device_id} value={d.device_id}>
                       {d.device_id}
                     </option>
@@ -181,7 +189,7 @@ export const Devices: React.FC = () => {
                   onChange={(e) => { setSimFlow(e.target.value); setSimResult(null); }}
                   style={SELECT_STYLE}
                 >
-                  {mockPolicies.map((p) => (
+                  {(policies.length > 0 ? policies : mockPolicies).map((p) => (
                     <option key={p.flow_id} value={p.flow_id}>
                       {p.flow_id}
                     </option>
@@ -430,12 +438,22 @@ export const Devices: React.FC = () => {
                           fontSize: 10,
                           padding: '1px 6px',
                           borderRadius: 3,
-                          background: 'rgba(245,158,11,0.12)',
-                          color: 'var(--amber)',
-                          border: '1px solid rgba(245,158,11,0.2)',
+                          background: simResult?.telemetry_status === 'ACCEPTED'
+                            ? 'rgba(16,185,129,0.12)'
+                            : 'rgba(245,158,11,0.12)',
+                          color: simResult?.telemetry_status === 'ACCEPTED'
+                            ? 'var(--green)'
+                            : 'var(--amber)',
+                          border: `1px solid ${
+                            simResult?.telemetry_status === 'ACCEPTED'
+                              ? 'rgba(16,185,129,0.2)'
+                              : 'rgba(245,158,11,0.2)'
+                          }`,
                         }}
                       >
-                        AWAITING S4
+                        {simResult?.telemetry_status === 'ACCEPTED'
+                          ? `GATEWAY ACCEPTED · CLOUD ${simResult.cloud_delivery === 'FORWARDED_TO_CLOUD' ? 'FORWARDED' : 'QUEUED'}`
+                          : 'AWAITING S4'}
                       </span>
                     )}
                   </div>
@@ -446,7 +464,7 @@ export const Devices: React.FC = () => {
                     </p>
                   ) : cr ? (
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 32px' }}>
-                      <Row label="Algorithm">
+                      <Row label="Approved Profile">
                         <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
                           {cr.algorithm ?? '—'}
                         </span>
@@ -458,9 +476,30 @@ export const Devices: React.FC = () => {
                             color: cr.crypto_status === 'SECURE' ? 'var(--green)' : 'var(--text-muted)',
                           }}
                         >
-                          {cr.crypto_status ?? '—'}
+                          {cr.crypto_status ?? 'Pending S4 integration'}
                         </span>
                       </Row>
+                      {simResult?.telemetry_status && (
+                        <Row label="Gateway Ingress">
+                          <span style={{ fontSize: 11, color: 'var(--green)' }}>
+                            {simResult.telemetry_status}
+                          </span>
+                        </Row>
+                      )}
+                      {simResult?.cloud_delivery && (
+                        <Row label="Cloud Forwarding">
+                          <span style={{ fontSize: 11, color: 'var(--accent-cyan)' }}>
+                            {simResult.cloud_delivery}
+                          </span>
+                        </Row>
+                      )}
+                      {simResult?.event_id && (
+                        <Row label="Cloud Event ID">
+                          <span style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'monospace' }}>
+                            {simResult.event_id.slice(0, 16)}…
+                          </span>
+                        </Row>
+                      )}
                       <Row label="Ciphertext">
                         <span style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'monospace' }}>
                           {cr.ciphertext_hex
@@ -499,7 +538,9 @@ export const Devices: React.FC = () => {
               <Cpu size={14} color="var(--accent-cyan)" />
               Registered Devices
             </span>
-            <span className="mock-badge">DEMO DATA</span>
+            <span className={isDevicesMocked ? "mock-badge" : "live-badge"}>
+              {isDevicesMocked ? "DEMO DATA" : "LIVE DEVICES"}
+            </span>
           </div>
           <DeviceTable devices={devices} />
         </div>

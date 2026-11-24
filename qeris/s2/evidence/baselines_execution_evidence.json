@@ -1,0 +1,44 @@
+{
+  "static_classical": {
+    "critical_flow_classical_request": "REJECT",
+    "low_flow_classical_request": "ALLOW",
+    "status_code_critical": 403,
+    "status_code_low": 200
+  },
+  "static_hybrid": {
+    "critical_flow_classical_request": "REJECT",
+    "low_flow_classical_request": "REJECT",
+    "status_code_critical": 403,
+    "status_code_low": 403
+  },
+  "static_pqc": {
+    "critical_flow_classical_request": "REJECT",
+    "low_flow_classical_request": "REJECT",
+    "status_code_critical": 403,
+    "status_code_low": 403
+  },
+  "sensitivity_only": {
+    "critical_flow_classical_request": "REJECT",
+    "low_flow_classical_request": "ALLOW",
+    "status_code_critical": 403,
+    "status_code_low": 200
+  },
+  "downgrade_on_failure": {
+    "critical_flow_classical_request": "ALLOW",
+    "low_flow_classical_request": "ALLOW",
+    "status_code_critical": 200,
+    "status_code_low": 200
+  },
+  "static_retry_with_floor": {
+    "critical_flow_classical_request": "REJECT",
+    "low_flow_classical_request": "ALLOW",
+    "status_code_critical": 403,
+    "status_code_low": 200
+  },
+  "full_gateway": {
+    "critical_flow_classical_request": "REJECT",
+    "low_flow_classical_request": "ALLOW",
+    "status_code_critical": 403,
+    "status_code_low": 200
+  }
+}

@@ -1,0 +1,92 @@
+{
+  "config_version": "2.0.0-frozen",
+  "config_digest": "7126e04629aac0a7f961d44b231258dcac4dae7164ff4da7b6e89834d5564c01",
+  "effective_config": {
+    "config_version": "2.0.0-frozen",
+    "baseline_mode": "full_gateway",
+    "sig_alg": "ML-DSA-65",
+    "authority_id": "QERIS-GATEWAY-AUTH-01",
+    "rate_limit_capacity": 10.0,
+    "rate_limit_refill_rate": 2.0,
+    "rate_limit_enabled": true,
+    "cloud_queue_max_size": 1000,
+    "cloud_forward_timeout_s": 2.0,
+    "cloud_url": "https://127.0.0.1:8001",
+    "cloud_ca_cert": "C:\\Users\\preks\\Desktop\\qeris-final\\qeris\\s2\\certs\\cloud_cert.pem",
+    "admin_api_key": "[CONFIGURED]",
+    "policy_db_path": "C:\\Users\\preks\\Desktop\\qeris-final\\qeris\\s2\\policy_store.db",
+    "registry_db_path": "C:\\Users\\preks\\Desktop\\qeris-final\\qeris\\s2\\device_registry.db",
+    "cloud_db_path": "C:\\Users\\preks\\Desktop\\qeris-final\\qeris\\s2\\cloud_telemetry.db",
+    "audit_log_path": "C:\\Users\\preks\\Desktop\\qeris-final\\qeris\\s2\\gateway_audit.jsonl"
+  },
+  "frozen": true,
+  "all_available_baselines": [
+    "static_classical",
+    "static_hybrid",
+    "static_pqc",
+    "sensitivity_only",
+    "downgrade_on_failure",
+    "static_retry_with_floor",
+    "full_gateway"
+  ],
+  "baseline_descriptions": {
+    "static_classical": "B1: Static Classical (ECDH). Strictly Classical key exchange; rejects non-classical requests and rejects flows where policy floor requires Hybrid or PQC.",
+    "static_hybrid": "B2: Static Hybrid (X25519 + ML-KEM). Fixed hybrid mode; rejects non-hybrid requests and rejects flows requiring PQC floor.",
+    "static_pqc": "B3: Static PQC (ML-KEM). Fixed pure post-quantum mode; rejects non-PQC requests and fails constrained devices unable to support PQC wire sizes or memory.",
+    "sensitivity_only": "B4: Sensitivity-Only. Enforces policy floor strictly by sensitivity tier, but disables all cause-classified recovery adaptations (no MTU fragmentation hints or backoff).",
+    "downgrade_on_failure": "B5: Downgrade-on-Failure. Naive industry fallback that steps down cryptographic mode to maintain connectivity upon failure, deliberately violating the security floor.",
+    "static_retry_with_floor": "B6: Static Retry with Floor. Enforces security floor, but retries blindly without classifying fault cause or adapting MTU packet size.",
+    "full_gateway": "B7: Full QERIS Gateway. Dynamic signed policy floor, pure deterministic readiness, S3 cause-classified recovery, adaptive MTU fragmentation, and DEC-4 epoch guards."
+  },
+  "baseline_recovery_properties": {
+    "static_classical": {
+      "adaptive_recovery": false,
+      "enforces_floor": true,
+      "allows_downgrade": false,
+      "provides_fragmentation_hints": false,
+      "fixed_mode": "CLASSICAL"
+    },
+    "static_hybrid": {
+      "adaptive_recovery": false,
+      "enforces_floor": true,
+      "allows_downgrade": false,
+      "provides_fragmentation_hints": false,
+      "fixed_mode": "HYBRID"
+    },
+    "static_pqc": {
+      "adaptive_recovery": false,
+      "enforces_floor": true,
+      "allows_downgrade": false,
+      "provides_fragmentation_hints": false,
+      "fixed_mode": "PQC"
+    },
+    "sensitivity_only": {
+      "adaptive_recovery": false,
+      "enforces_floor": true,
+      "allows_downgrade": false,
+      "provides_fragmentation_hints": false,
+      "fixed_mode": null
+    },
+    "downgrade_on_failure": {
+      "adaptive_recovery": false,
+      "enforces_floor": false,
+      "allows_downgrade": true,
+      "provides_fragmentation_hints": false,
+      "fixed_mode": null
+    },
+    "static_retry_with_floor": {
+      "adaptive_recovery": false,
+      "enforces_floor": true,
+      "allows_downgrade": false,
+      "provides_fragmentation_hints": false,
+      "fixed_mode": null
+    },
+    "full_gateway": {
+      "adaptive_recovery": true,
+      "enforces_floor": true,
+      "allows_downgrade": false,
+      "provides_fragmentation_hints": true,
+      "fixed_mode": null
+    }
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "ml_dsa_65": {
+    "public_key_hex_length": 3904,
+    "signature_hex_length": 6618,
+    "sig_alg": "ML-DSA-65"
+  },
+  "ml_kem_768": {
+    "public_key_bytes_length": 1184,
+    "ciphertext_bytes_length": 1088,
+    "shared_secret_bytes_length": 32,
+    "encap_decap_match": true
+  },
+  "hkdf_session_key_length": 32,
+  "dec4_epoch_invalidation": {
+    "initial_session_state": "ACTIVE",
+    "epoch_advanced": true,
+    "session_state_after_policy_update": "STALE",
+    "is_valid_after_update": false,
+    "invalidation_reason": "Session profile 'PQC_MLKEM512_AESGCM' is no longer approved under new policy version 4 (approved: ['PQC_MLKEM768_AESGCM'])"
+  }
+}

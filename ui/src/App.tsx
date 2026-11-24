@@ -8,15 +8,18 @@ import { Policies } from './pages/Policies';
 import { Security } from './pages/Security';
 import { AuditLogs } from './pages/AuditLogs';
 import { getGatewayStatus } from './services/api';
+import type { GatewayStatus } from './types/qeris';
 
 function App() {
   const [gatewayOnline, setGatewayOnline] = useState(false);
+  const [gwStatus, setGwStatus] = useState<GatewayStatus | null>(null);
 
   useEffect(() => {
     // Check gateway status on load and every 15s
     const check = async () => {
       const status = await getGatewayStatus();
       setGatewayOnline(status.online);
+      setGwStatus(status);
     };
     check();
     const interval = setInterval(check, 15000);
@@ -26,7 +29,7 @@ function App() {
   return (
     <BrowserRouter>
       <div className="app-layout">
-        <Sidebar gatewayOnline={gatewayOnline} />
+        <Sidebar gatewayOnline={gatewayOnline} baselineMode={gwStatus?.baseline_mode} />
         <main className="main-content">
           <Routes>
             <Route path="/" element={<Dashboard gatewayOnline={gatewayOnline} />} />

@@ -1,0 +1,28 @@
+{
+  "authority_id": "QERIS-GATEWAY",
+  "policy_v1_install": {
+    "status": "INSTALLED_AND_ACTIVATED",
+    "version": 1
+  },
+  "policy_v2_install": {
+    "status": "INSTALLED_AND_ACTIVATED",
+    "version": 2
+  },
+  "policy_v3_install": {
+    "status": "INSTALLED_AND_ACTIVATED",
+    "version": 3
+  },
+  "idempotent_v3_replay": {
+    "status": "IDEMPOTENT_ACCEPTED",
+    "message": "Policy version 3 matches active version with identical digest (idempotent re-acceptance)"
+  },
+  "rollback_attack_v1_rejected": {
+    "status": "ROLLBACK_REJECTED",
+    "message": "Policy version 1 is lower than persisted highest version 3 (rollback attack detected)"
+  },
+  "tampered_policy_check": {
+    "is_valid": false,
+    "status": "DIGEST_MISMATCH"
+  },
+  "persisted_highest_version": 3
+}

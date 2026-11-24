@@ -329,16 +329,20 @@ class TestAN_Analysis(unittest.TestCase):
         self.assertEqual(cm.matrix["security_failure"]["mtu_fragment"], 0)
 
     def test_AN10_summarize_baselines_returns_all_7(self):
+        import tempfile
         pilot = ExperimentMatrix.generate_pilot_matrix(repetitions_per_cell=3)
-        runner = ExperimentRunner(output_base_dir="/tmp/qeris_test_runs")
+        tmpdir = os.path.join(tempfile.gettempdir(), "qeris_test_runs")
+        runner = ExperimentRunner(output_base_dir=tmpdir)
         _, _, table = runner.run_matrix(pilot, run_id="test_summary", verbose=False)
         summary = StatisticalAnalyzer.summarize_baselines(table)
         self.assertEqual(len(summary), 7)
 
     def test_AN11_floor_invariant_full_gateway_zero_violations(self):
         """Full gateway must produce ZERO floor violations in any clean pilot run."""
+        import tempfile
         pilot = ExperimentMatrix.generate_pilot_matrix(repetitions_per_cell=5)
-        runner = ExperimentRunner(output_base_dir="/tmp/qeris_test_runs")
+        tmpdir = os.path.join(tempfile.gettempdir(), "qeris_test_runs")
+        runner = ExperimentRunner(output_base_dir=tmpdir)
         _, _, table = runner.run_matrix(pilot, run_id="test_floor_invariant", verbose=False)
         full_gw_viols = table.filter(
             lambda r: r.baseline == "full_gateway" and r.outcome == LogOutcome.FLOOR_VIOLATION.value
@@ -366,8 +370,10 @@ class TestRUN_EndToEnd(unittest.TestCase):
         self.assertEqual(len(cells), 105)
 
     def test_RUN3_pilot_run_produces_records(self):
+        import tempfile
         cells = ExperimentMatrix.generate_pilot_matrix(repetitions_per_cell=3)
-        runner = ExperimentRunner(output_base_dir="/tmp/qeris_test_runs", base_seed=42)
+        tmpdir = os.path.join(tempfile.gettempdir(), "qeris_test_runs")
+        runner = ExperimentRunner(output_base_dir=tmpdir, base_seed=42)
         _, _, table = runner.run_matrix(cells, run_id="test_e2e_pilot", verbose=False)
         self.assertGreater(len(table), 0)
 
@@ -383,7 +389,8 @@ class TestRUN_EndToEnd(unittest.TestCase):
     def test_RUN5_figures_and_tables_generate_without_error(self):
         import tempfile
         cells = ExperimentMatrix.generate_pilot_matrix(repetitions_per_cell=3)
-        runner = ExperimentRunner(output_base_dir="/tmp/qeris_test_runs", base_seed=7)
+        tmpdir = os.path.join(tempfile.gettempdir(), "qeris_test_runs")
+        runner = ExperimentRunner(output_base_dir=tmpdir, base_seed=7)
         _, _, table = runner.run_matrix(cells, run_id="test_figs", verbose=False)
         with tempfile.TemporaryDirectory() as tmpdir:
             from generate_figures import FigureGenerator

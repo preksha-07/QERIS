@@ -27,6 +27,20 @@ export interface FlowResponse {
   requested_mode: SecurityMode;
   decision: Decision;
   reason: string;
+  baseline_mode?: string;
+  adaptive_recovery?: boolean;
+  floor_violation?: boolean;
+  s3_verdict?: string;
+  policy_digest?: string;
+  readiness?: {
+    device_id?: string;
+    status?: string;
+    can_support_pqc?: boolean;
+    can_support_hybrid?: boolean;
+    recommended_profile?: string;
+    requires_fragmentation?: boolean;
+    reason?: string;
+  };
 }
 
 export interface Policy {
@@ -72,6 +86,14 @@ export interface SecurityEvent {
 export interface GatewayStatus {
   online: boolean;
   checked_at: string;
+  service?: string;
+  baseline_mode?: string;
+  policy_installed?: boolean;
+  active_policy_version?: number;
+  active_policy_digest?: string;
+  cloud_queue_size?: number;
+  cloud_dropped_count?: number;
+  active_sessions_count?: number;
 }
 
 export interface DashboardStats {
@@ -80,6 +102,36 @@ export interface DashboardStats {
   blocked: number;
   securityEvents: number;
   floorUnreachable: number;
+}
+
+export interface CloudStats {
+  total_records: number;
+  breakdown: Record<string, number>;
+  by_sensitivity: Record<string, number>;
+}
+
+export interface CloudRecord {
+  id: number;
+  event_id: string;
+  device_id: string;
+  flow_id: string;
+  timestamp: number;
+  sensitivity: string;
+  security_profile: string;
+  policy_version: number;
+  policy_digest: string;
+  payload: any;
+  gateway_decision: string;
+  received_at: number;
+}
+
+export interface BaselineConfig {
+  status?: string;
+  baseline_mode: string;
+  description: string;
+  recovery_properties?: Record<string, any>;
+  frozen: boolean;
+  all_available_baselines?: string[];
 }
 
 // ─── Transmission / Crypto Result ─────────────────────────────────────────────
@@ -106,6 +158,14 @@ export interface TransmissionResult {
   crypto: CryptoResult | null;
   /** The original user-entered message */
   message: string;
+  /** Telemetry delivery status if forwarded to cloud */
+  telemetry_status?: string;
+  /** Cloud delivery state e.g. FORWARDED_TO_CLOUD or QUEUED_FOR_CLOUD */
+  cloud_delivery?: string;
+  /** Unique telemetry event ID */
+  event_id?: string;
+  /** Outage buffer queue size */
+  queue_size?: number;
 }
 
 // Failure classification for S3 / future recovery module

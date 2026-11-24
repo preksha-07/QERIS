@@ -12,6 +12,7 @@ import {
 
 interface SidebarProps {
   gatewayOnline: boolean;
+  baselineMode?: string;
 }
 
 const navItems = [
@@ -23,7 +24,7 @@ const navItems = [
   { to: '/audit', icon: ScrollText, label: 'Audit Logs' },
 ];
 
-export const Sidebar: React.FC<SidebarProps> = ({ gatewayOnline }) => {
+export const Sidebar: React.FC<SidebarProps> = ({ gatewayOnline, baselineMode }) => {
   return (
     <aside className="sidebar">
       {/* Brand */}
@@ -64,6 +65,11 @@ export const Sidebar: React.FC<SidebarProps> = ({ gatewayOnline }) => {
         </div>
         <div style={{ marginTop: 8, fontSize: 10, color: 'var(--text-muted)' }}>
           QERIS-GATEWAY · v1.0.0
+          {baselineMode && (
+            <div style={{ color: 'var(--accent-cyan)', marginTop: 2, fontSize: 9 }}>
+              {baselineMode}
+            </div>
+          )}
         </div>
       </div>
     </aside>

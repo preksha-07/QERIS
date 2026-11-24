@@ -7,13 +7,17 @@ import type { AuditLog, Decision, Sensitivity } from '../types/qeris';
 
 export const AuditLogs: React.FC = () => {
   const [logs, setLogs] = useState<AuditLog[]>([]);
+  const [isMocked, setIsMocked] = useState<boolean>(true);
   const [search, setSearch] = useState('');
   const [decisionFilter, setDecisionFilter] = useState<Decision | 'ALL'>('ALL');
   const [sensitivityFilter, setSensitivityFilter] = useState<Sensitivity | 'ALL'>('ALL');
   const [selectedLog, setSelectedLog] = useState<AuditLog | null>(null);
 
   useEffect(() => {
-    getAuditLogs().then(({ data }) => setLogs(data));
+    getAuditLogs().then(({ data, mocked }) => {
+      setLogs(data);
+      setIsMocked(mocked);
+    });
   }, []);
 
   const filtered = logs.filter((log) => {
@@ -111,7 +115,9 @@ export const AuditLogs: React.FC = () => {
               <ScrollText size={14} color="var(--accent-cyan)" />
               Gateway Decision Log
             </span>
-            <span className="mock-badge">DEMO DATA</span>
+            <span className={isMocked ? "mock-badge" : "live-badge"}>
+              {isMocked ? "DEMO DATA" : "LIVE AUDIT LOGS"}
+            </span>
           </div>
 
           {sorted.length === 0 ? (

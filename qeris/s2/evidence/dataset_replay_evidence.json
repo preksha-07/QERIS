@@ -1,0 +1,166 @@
+{
+  "total_replayed": 25,
+  "allowed_count": 0,
+  "rejected_count": 25,
+  "forwarded_to_cloud": 0,
+  "flows_exercised": [
+    "flow_critical_01",
+    "flow_high_01",
+    "flow_low_01"
+  ],
+  "devices_exercised": [
+    "dev_esp32_constrained_01"
+  ],
+  "decisions": [
+    {
+      "flow_id": "flow_critical_01",
+      "mode": "CLASSICAL",
+      "decision": "REJECT",
+      "reason": "Unknown flow 'flow_critical_01'"
+    },
+    {
+      "flow_id": "flow_critical_01",
+      "mode": "CLASSICAL",
+      "decision": "REJECT",
+      "reason": "Unknown flow 'flow_critical_01'"
+    },
+    {
+      "flow_id": "flow_critical_01",
+      "mode": "CLASSICAL",
+      "decision": "REJECT",
+      "reason": "Unknown flow 'flow_critical_01'"
+    },
+    {
+      "flow_id": "flow_critical_01",
+      "mode": "CLASSICAL",
+      "decision": "REJECT",
+      "reason": "Unknown flow 'flow_critical_01'"
+    },
+    {
+      "flow_id": "flow_critical_01",
+      "mode": "CLASSICAL",
+      "decision": "REJECT",
+      "reason": "Unknown flow 'flow_critical_01'"
+    },
+    {
+      "flow_id": "flow_low_01",
+      "mode": "CLASSICAL",
+      "decision": "REJECT",
+      "reason": "Unknown flow 'flow_low_01'"
+    },
+    {
+      "flow_id": "flow_low_01",
+      "mode": "CLASSICAL",
+      "decision": "REJECT",
+      "reason": "Unknown flow 'flow_low_01'"
+    },
+    {
+      "flow_id": "flow_low_01",
+      "mode": "CLASSICAL",
+      "decision": "REJECT",
+      "reason": "Unknown flow 'flow_low_01'"
+    },
+    {
+      "flow_id": "flow_low_01",
+      "mode": "CLASSICAL",
+      "decision": "REJECT",
+      "reason": "Unknown flow 'flow_low_01'"
+    },
+    {
+      "flow_id": "flow_low_01",
+      "mode": "CLASSICAL",
+      "decision": "REJECT",
+      "reason": "Unknown flow 'flow_low_01'"
+    },
+    {
+      "flow_id": "flow_low_01",
+      "mode": "CLASSICAL",
+      "decision": "REJECT",
+      "reason": "Per-device rate limit exceeded"
+    },
+    {
+      "flow_id": "flow_low_01",
+      "mode": "CLASSICAL",
+      "decision": "REJECT",
+      "reason": "Per-device rate limit exceeded"
+    },
+    {
+      "flow_id": "flow_low_01",
+      "mode": "CLASSICAL",
+      "decision": "REJECT",
+      "reason": "Per-device rate limit exceeded"
+    },
+    {
+      "flow_id": "flow_low_01",
+      "mode": "CLASSICAL",
+      "decision": "REJECT",
+      "reason": "Per-device rate limit exceeded"
+    },
+    {
+      "flow_id": "flow_low_01",
+      "mode": "CLASSICAL",
+      "decision": "REJECT",
+      "reason": "Per-device rate limit exceeded"
+    },
+    {
+      "flow_id": "flow_critical_01",
+      "mode": "CLASSICAL",
+      "decision": "REJECT",
+      "reason": "Per-device rate limit exceeded"
+    },
+    {
+      "flow_id": "flow_critical_01",
+      "mode": "CLASSICAL",
+      "decision": "REJECT",
+      "reason": "Per-device rate limit exceeded"
+    },
+    {
+      "flow_id": "flow_critical_01",
+      "mode": "CLASSICAL",
+      "decision": "REJECT",
+      "reason": "Per-device rate limit exceeded"
+    },
+    {
+      "flow_id": "flow_critical_01",
+      "mode": "CLASSICAL",
+      "decision": "REJECT",
+      "reason": "Per-device rate limit exceeded"
+    },
+    {
+      "flow_id": "flow_critical_01",
+      "mode": "CLASSICAL",
+      "decision": "REJECT",
+      "reason": "Per-device rate limit exceeded"
+    },
+    {
+      "flow_id": "flow_high_01",
+      "mode": "CLASSICAL",
+      "decision": "REJECT",
+      "reason": "Per-device rate limit exceeded"
+    },
+    {
+      "flow_id": "flow_high_01",
+      "mode": "CLASSICAL",
+      "decision": "REJECT",
+      "reason": "Per-device rate limit exceeded"
+    },
+    {
+      "flow_id": "flow_high_01",
+      "mode": "CLASSICAL",
+      "decision": "REJECT",
+      "reason": "Per-device rate limit exceeded"
+    },
+    {
+      "flow_id": "flow_high_01",
+      "mode": "CLASSICAL",
+      "decision": "REJECT",
+      "reason": "Per-device rate limit exceeded"
+    },
+    {
+      "flow_id": "flow_high_01",
+      "mode": "CLASSICAL",
+      "decision": "REJECT",
+      "reason": "Per-device rate limit exceeded"
+    }
+  ]
+}
