@@ -643,8 +643,16 @@ class TestTaxonomy(unittest.TestCase):
         e = self.t.classify(ObservedSignals(auth_check_failed=True, fragment_size_exceeded=True))
         self.assertEqual(e.cause, CauseClass.SECURITY_FAILURE)
 
-    def test_empty_signals_is_loss(self):
+    def test_empty_signals_is_unknown(self):
+        # DEC-5 / C4 (Blueprint): when no signals match a known cause the
+        # classifier MUST abstain → CAUSE_UNKNOWN, not guess LOSS_TIMEOUT.
         e = self.t.classify(ObservedSignals())
+        self.assertEqual(e.cause, CauseClass.CAUSE_UNKNOWN)
+        self.assertEqual(e.label_confidence, "low")
+
+    def test_no_response_is_loss(self):
+        # Explicit no_response signal → LOSS_TIMEOUT
+        e = self.t.classify(ObservedSignals(no_response=True))
         self.assertEqual(e.cause, CauseClass.LOSS_TIMEOUT)
 
     def test_to_dict_has_cause(self):

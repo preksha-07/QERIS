@@ -1,0 +1,69 @@
+# S3 - Recovery Resource Budgets (Blueprint §D, §12, §23)
+# =========================================================
+# Hard upper bounds for every cause class's retry behaviour.
+# These are the defaults loaded at controller startup.
+# Override per-deployment via constructor arguments.
+#
+# Design principle: every bound is HARD (no soft caps, no silent extension).
+# When a cap is reached, the controller returns FAIL or FLOOR_UNREACHABLE.
+# A security failure NEVER enters these budgets — it is always terminal.
+
+budgets:
+
+  LOSS_TIMEOUT:
+    max_retries: 3
+    base_backoff_ms: 200
+    max_backoff_ms: 8000
+    backoff_strategy: exponential   # delay = min(base * 2^(attempt-1), max)
+    notes: >
+      3 retries × max 8 s backoff = at most 24 s of additional wait before FAIL.
+      Floor re-checked before every retry attempt.
+
+  MTU_FRAGMENT:
+    max_retries: 2
+    base_backoff_ms: 0              # refragmentation is immediate; no delay
+    max_backoff_ms: 0
+    backoff_strategy: none
+    notes: >
+      2 refragmentation attempts. Each attempt MUST still carry PQ key material
+      at the signed floor profile; if not feasible → FLOOR_UNREACHABLE.
+
+  COMPUTE:
+    max_retries: 2
+    base_backoff_ms: 500
+    max_backoff_ms: 4000
+    backoff_strategy: linear        # delay = base * attempt
+    enabled_conditionally: true
+    condition: >
+      Enabled only if compute-delay signals were observed in pilot data.
+      If disabled, COMPUTE failures are treated as terminal (DISCARD_AND_LOG).
+    notes: >
+      2 timeout extensions. Each extends the response-wait window linearly.
+
+  CAUSE_UNKNOWN:
+    max_retries: 1                  # HARD CAP: at most 1 observation window
+    base_backoff_ms: 200            # fixed single backoff (no doubling)
+    max_backoff_ms: 200
+    backoff_strategy: fixed
+    notes: >
+      Abstention class (DEC-5 / C4). Exactly 1 observation attempt.
+      No profile change. If still unclassified → FAIL.
+      S4 receives the CAUSE_UNKNOWN label for the confusion matrix.
+
+  SECURITY_FAILURE:
+    max_retries: 0                  # always terminal; no retry budget
+    base_backoff_ms: 0
+    max_backoff_ms: 0
+    backoff_strategy: none
+    notes: >
+      No retry at any mode. Invariants I4 and I7. Session quarantined immediately.
+
+  global:
+    floor_check_before_retry: true  # mandatory — the research contribution
+    downgrade_on_retry: false       # NEVER weaken mode as a recovery action
+    observation_window_ms: 500      # used by CAUSE_UNKNOWN for signal collection
+    notes: >
+      The floor-bounded guarantee: every action returned by the controller is
+      pre-checked so that mode_after(action) >= signed_floor. If no action
+      satisfies this, FLOOR_UNREACHABLE is returned and retrying stops.
+      This is Invariant I1 maintained across the recovery path.

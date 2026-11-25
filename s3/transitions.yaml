@@ -1,0 +1,255 @@
+# S3 - State Machine Transition Table (Blueprint §12, §B)
+# =========================================================
+# Format per row:
+#   state        : current FlowState
+#   event        : EventKind
+#   guard        : human-readable guard condition (enforced in floor_state_machine.py)
+#   next_state   : resulting FlowState
+#   actions      : list of ActionKind emitted
+#   invariants   : invariants this transition helps enforce
+
+transitions:
+
+  # ---- UNREGISTERED ---------------------------------------------------------
+  - state:      UNREGISTERED
+    event:      POLICY_VERIFIED
+    guard:      floor_mode is not None
+    next_state: REGISTERED
+    actions:    [LOG_INFO]
+    invariants: [I2]
+
+  - state:      UNREGISTERED
+    event:      POLICY_VERIFIED
+    guard:      floor_mode is None
+    next_state: UNREGISTERED
+    actions:    [LOG_SECURITY]
+    invariants: [I2]
+
+  - state:      UNREGISTERED
+    event:      SECURITY_FAILURE
+    guard:      always
+    next_state: QUARANTINED
+    actions:    [LOG_SECURITY, QUARANTINE]
+    invariants: [I4]
+
+  - state:      UNREGISTERED
+    event:      RESTART
+    guard:      always
+    next_state: UNREGISTERED
+    actions:    [LOG_INFO]
+    invariants: [I5]
+
+  # ---- REGISTERED -----------------------------------------------------------
+  - state:      REGISTERED
+    event:      POLICY_VERIFIED
+    guard:      floor_mode is not None
+    next_state: POLICY_VALID
+    actions:    [RESET_FLOOR, LOG_INFO]
+    invariants: [I2]
+
+  - state:      REGISTERED
+    event:      POLICY_REJECTED
+    guard:      always
+    next_state: REGISTERED
+    actions:    [LOG_SECURITY]
+    invariants: [I2]
+
+  - state:      REGISTERED
+    event:      SECURITY_FAILURE
+    guard:      always
+    next_state: QUARANTINED
+    actions:    [LOG_SECURITY, QUARANTINE]
+    invariants: [I4]
+
+  - state:      REGISTERED
+    event:      RESTART
+    guard:      always
+    next_state: REGISTERED
+    actions:    [LOG_INFO]
+    invariants: [I5]
+
+  # ---- POLICY_VALID ---------------------------------------------------------
+  - state:      POLICY_VALID
+    event:      HANDSHAKE_STARTED
+    guard:      floor_mode set AND device_best_mode >= floor_mode
+    next_state: NEGOTIATING
+    actions:    [LOG_INFO]
+    invariants: [I1, I6]
+
+  - state:      POLICY_VALID
+    event:      HANDSHAKE_STARTED
+    guard:      device_best_mode < floor_mode
+    next_state: POLICY_VALID
+    actions:    [REPORT_UNREACHABLE, LOG_SECURITY]
+    invariants: [I1]
+
+  - state:      POLICY_VALID
+    event:      FLOOR_UNREACHABLE
+    guard:      always
+    next_state: POLICY_VALID
+    actions:    [REPORT_UNREACHABLE, LOG_SECURITY]
+    invariants: [I1]
+
+  - state:      POLICY_VALID
+    event:      POLICY_VERIFIED
+    guard:      always
+    next_state: POLICY_VALID
+    actions:    [RESET_FLOOR, LOG_INFO]
+    invariants: [I2]
+
+  - state:      POLICY_VALID
+    event:      POLICY_REJECTED
+    guard:      always
+    next_state: POLICY_VALID
+    actions:    [LOG_SECURITY]
+    invariants: [I2]
+
+  - state:      POLICY_VALID
+    event:      SECURITY_FAILURE
+    guard:      always
+    next_state: QUARANTINED
+    actions:    [LOG_SECURITY, QUARANTINE]
+    invariants: [I4]
+
+  - state:      POLICY_VALID
+    event:      RESTART
+    guard:      always
+    next_state: REGISTERED
+    actions:    [LOG_INFO]
+    invariants: [I5]
+
+  # ---- NEGOTIATING ----------------------------------------------------------
+  - state:      NEGOTIATING
+    event:      HANDSHAKE_OK
+    guard:      >
+                negotiated_mode >= floor_mode
+                AND activation_check passes (I8: epoch matches or profile in new approved set)
+    next_state: ACTIVE
+    actions:    [LOG_INFO]
+    invariants: [I1, I8]
+
+  - state:      NEGOTIATING
+    event:      HANDSHAKE_OK
+    guard:      negotiated_mode < floor_mode
+    next_state: POLICY_VALID
+    actions:    [LOG_SECURITY, CLOSE_SESSION]
+    invariants: [I1, I7]
+
+  - state:      NEGOTIATING
+    event:      HANDSHAKE_OK
+    guard:      >
+                I8: epoch changed AND profile NOT in new approved_profiles
+                (IMPOSSIBLE_QUARANTINE)
+    next_state: QUARANTINED
+    actions:    [LOG_SECURITY, CLOSE_SESSION, QUARANTINE]
+    invariants: [I8]
+
+  - state:      NEGOTIATING
+    event:      HANDSHAKE_OK
+    guard:      >
+                I8: epoch changed AND profile IN new approved_profiles
+                (INCOMPATIBLE_RESTART)
+    next_state: POLICY_VALID
+    actions:    [LOG_SECURITY, CLOSE_SESSION]
+    invariants: [I8]
+
+  - state:      NEGOTIATING
+    event:      SECURITY_FAILURE
+    guard:      always
+    next_state: QUARANTINED
+    actions:    [LOG_SECURITY, CLOSE_SESSION, QUARANTINE]
+    invariants: [I4]
+
+  - state:      NEGOTIATING
+    event:      TRANSPORT_FAILURE
+    guard:      cause != SECURITY_FAILURE
+    next_state: DEGRADED
+    actions:    [LOG_INFO, ALLOW_RETRY]
+    invariants: [I3, I7]
+
+  - state:      NEGOTIATING
+    event:      FLOOR_UNREACHABLE
+    guard:      always
+    next_state: POLICY_VALID
+    actions:    [REPORT_UNREACHABLE, CLOSE_SESSION, LOG_SECURITY]
+    invariants: [I1]
+
+  - state:      NEGOTIATING
+    event:      RESTART
+    guard:      always
+    next_state: REGISTERED
+    actions:    [CLOSE_SESSION, LOG_INFO]
+    invariants: [I5]
+
+  # ---- ACTIVE ---------------------------------------------------------------
+  - state:      ACTIVE
+    event:      TRANSPORT_FAILURE
+    guard:      cause != SECURITY_FAILURE
+    next_state: DEGRADED
+    actions:    [LOG_INFO, ALLOW_RETRY]
+    invariants: [I3, I7]
+
+  - state:      ACTIVE
+    event:      SECURITY_FAILURE
+    guard:      always
+    next_state: QUARANTINED
+    actions:    [LOG_SECURITY, CLOSE_SESSION, QUARANTINE]
+    invariants: [I4]
+
+  - state:      ACTIVE
+    event:      POLICY_VERIFIED
+    guard:      negotiated_mode >= new_floor_mode
+    next_state: ACTIVE
+    actions:    [RESET_FLOOR, LOG_INFO]
+    invariants: [I2]
+
+  - state:      ACTIVE
+    event:      POLICY_VERIFIED
+    guard:      negotiated_mode < new_floor_mode
+    next_state: POLICY_VALID
+    actions:    [LOG_SECURITY, RESET_FLOOR, CLOSE_SESSION]
+    invariants: [I1, I2]
+
+  - state:      ACTIVE
+    event:      RESTART
+    guard:      always
+    next_state: REGISTERED
+    actions:    [CLOSE_SESSION, LOG_INFO]
+    invariants: [I5]
+
+  # ---- DEGRADED -------------------------------------------------------------
+  - state:      DEGRADED
+    event:      TRANSPORT_RESOLVED
+    guard:      always
+    next_state: ACTIVE
+    actions:    [LOG_INFO]
+    invariants: [I3]
+
+  - state:      DEGRADED
+    event:      TRANSPORT_FAILURE
+    guard:      cause != SECURITY_FAILURE
+    next_state: DEGRADED
+    actions:    [LOG_INFO, ALLOW_RETRY]
+    invariants: [I3, I7]
+
+  - state:      DEGRADED
+    event:      SECURITY_FAILURE
+    guard:      always
+    next_state: QUARANTINED
+    actions:    [LOG_SECURITY, CLOSE_SESSION, QUARANTINE]
+    invariants: [I4]
+
+  - state:      DEGRADED
+    event:      RESTART
+    guard:      always
+    next_state: REGISTERED
+    actions:    [CLOSE_SESSION, LOG_INFO]
+    invariants: [I5]
+
+  # ---- QUARANTINED ----------------------------------------------------------
+  - state:      QUARANTINED
+    event:      "*"
+    guard:      always (terminal — administrative reset only)
+    next_state: QUARANTINED
+    actions:    [LOG_SECURITY]
+    invariants: []

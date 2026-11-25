@@ -51,6 +51,7 @@ class ControllerVerdict(Enum):
     DISCARD_AND_LOG   = auto()   # security failure: terminal
     FLOOR_UNREACHABLE = auto()   # device cannot meet floor; stop retrying
     FAIL              = auto()   # retry cap reached; escalate
+    OBSERVE_AND_WAIT  = auto()   # CAUSE_UNKNOWN: 1 observation window, no mode change
 
 
 @dataclass(frozen=True)
@@ -81,6 +82,7 @@ class _RetryState:
     loss_attempts: int = 0
     mtu_attempts: int = 0
     compute_attempts: int = 0
+    unknown_attempts: int = 0
     last_backoff_ms: int = 0
 
 
@@ -202,6 +204,10 @@ class RecoveryController:
                 )
             return self._compute(session_id, state, ctx)
 
+        # ---- CAUSE_UNKNOWN (DEC-5 / C4 — Blueprint abstention class) --------
+        if cause is CauseClass.CAUSE_UNKNOWN:
+            return self._unknown(session_id, state, ctx)
+
         # Unknown cause — fail closed (G6)
         return ControllerDecision(
             verdict=ControllerVerdict.DISCARD_AND_LOG,
@@ -320,4 +326,47 @@ class RecoveryController:
             session_id=session_id,
             attempt=attempt,
             detail=f"compute:extended_timeout={attempt}/{self._max_compute}",
+        )
+
+    def _unknown(self, session_id: str, state: _RetryState, ctx: FlowContext) -> ControllerDecision:
+        """CAUSE_UNKNOWN: at most 1 observation retry window, no profile change.
+
+        Blueprint DEC-5 / C4 specifies:
+          - allow at most 1 observation window to gather more signals
+          - no mode/profile change allowed (floor integrity preserved)
+          - if still unclassified after 1 attempt → FAIL (conservative)
+          - floor feasibility still applies
+        """
+        state.unknown_attempts += 1
+        attempt = state.unknown_attempts
+        # Hard cap: 1 observation window only
+        if attempt > 1:
+            return ControllerDecision(
+                verdict=ControllerVerdict.FAIL,
+                cause=CauseClass.CAUSE_UNKNOWN,
+                session_id=session_id,
+                attempt=attempt,
+                close_session=True,
+                detail="cause_unknown:observation_window_expired:giving_up",
+            )
+        # Floor feasibility still applies — no weakening under uncertainty
+        if not self._floor_ok(ctx):
+            return ControllerDecision(
+                verdict=ControllerVerdict.FLOOR_UNREACHABLE,
+                cause=CauseClass.CAUSE_UNKNOWN,
+                session_id=session_id,
+                attempt=attempt,
+                close_session=True,
+                detail="cause_unknown:floor_would_be_breached",
+            )
+        return ControllerDecision(
+            verdict=ControllerVerdict.OBSERVE_AND_WAIT,
+            cause=CauseClass.CAUSE_UNKNOWN,
+            session_id=session_id,
+            attempt=attempt,
+            backoff_ms=self._base_ms,  # fixed single backoff window
+            detail=(
+                "cause_unknown:observation_window=1:no_profile_change:"
+                "awaiting_reclassification"
+            ),
         )
