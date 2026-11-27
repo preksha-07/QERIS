@@ -1,0 +1,139 @@
+# S3 - Recovery Action Table (Blueprint §D, §12, §23)
+# =====================================================
+# Defines the ALLOWED recovery actions for each cause class.
+# "No action in this set may lower the security floor below the signed minimum."
+# (The floor-bounded guarantee — the research contribution.)
+#
+# Format per entry:
+#   cause        : CauseClass
+#   verdict      : ControllerVerdict emitted
+#   description  : human-readable description
+#   mode_change  : whether the action changes the security profile/mode
+#   floor_bounded: whether the floor check is enforced before allowing the action
+
+actions:
+
+  LOSS_TIMEOUT:
+    allowed_verdicts:
+      - verdict: RETRY
+        description: >
+          Retry the handshake or delivery at the SAME security profile.
+          Exponential backoff applied (base_backoff_ms, doubles each attempt).
+          Floor guard: mode_after(retry) == mode_before(retry).
+        mode_change: false
+        floor_bounded: true
+
+      - verdict: FAIL
+        description: >
+          Retry cap reached. Escalate. Session closed. No downgrade.
+        mode_change: false
+        floor_bounded: true
+
+    disallowed_verdicts:
+      - EXTEND_TIMEOUT
+      - REFRAGMENT
+      - OBSERVE_AND_WAIT
+      - DISCARD_AND_LOG  # only for SECURITY_FAILURE
+
+  MTU_FRAGMENT:
+    allowed_verdicts:
+      - verdict: REFRAGMENT
+        description: >
+          Reduce fragment size and retry at the SAME security profile.
+          If the smaller fragment size still cannot carry PQ key material,
+          report FloorUnreachable instead of falling back to a weaker profile.
+        mode_change: false
+        floor_bounded: true
+
+      - verdict: FAIL
+        description: >
+          Refragment cap reached. Escalate. Session closed.
+        mode_change: false
+        floor_bounded: true
+
+    disallowed_verdicts:
+      - RETRY
+      - EXTEND_TIMEOUT
+      - OBSERVE_AND_WAIT
+      - DISCARD_AND_LOG
+
+  COMPUTE:
+    enabled_conditionally: true
+    condition: >
+      Include this class ONLY if compute-delay signals were actually observed in
+      Week-1 pilot data. If not observed, disable and report honestly in the paper
+      (S3 spec §C §66). When disabled, COMPUTE failures are treated as terminal.
+    allowed_verdicts:
+      - verdict: EXTEND_TIMEOUT
+        description: >
+          Give the peer device more time (extend the response-wait window).
+          No mode change. Floor guard enforced.
+        mode_change: false
+        floor_bounded: true
+
+      - verdict: FAIL
+        description: >
+          Timeout extension cap reached. Escalate. Session closed.
+        mode_change: false
+        floor_bounded: true
+
+    disallowed_verdicts:
+      - RETRY
+      - REFRAGMENT
+      - OBSERVE_AND_WAIT
+      - DISCARD_AND_LOG
+
+  CAUSE_UNKNOWN:
+    description: >
+      Abstention class (Blueprint DEC-5 / C4). Signals are ambiguous or
+      insufficient to assign a confident cause. The controller MUST abstain
+      rather than guess. Only ONE observation retry window is permitted.
+    allowed_verdicts:
+      - verdict: OBSERVE_AND_WAIT
+        description: >
+          Collect more signals in one observation window (fixed backoff = base_backoff_ms).
+          No profile change, no mode change, no floor weakening.
+          After ONE attempt, if still unclassified, escalate with FAIL.
+        mode_change: false
+        floor_bounded: true
+
+      - verdict: FAIL
+        description: >
+          Observation window expired. Escalate. Session closed.
+          Hard cap: 1 observation attempt only.
+        mode_change: false
+        floor_bounded: true
+
+    disallowed_verdicts:
+      - RETRY
+      - REFRAGMENT
+      - EXTEND_TIMEOUT
+      - DISCARD_AND_LOG
+
+  SECURITY_FAILURE:
+    description: >
+      Always terminal. No retry, no retry at weaker mode, no escalation path
+      that could activate a session. Invariants I4 and I7.
+    allowed_verdicts:
+      - verdict: DISCARD_AND_LOG
+        description: >
+          Reject the event. Log to audit trail. Move flow to QUARANTINED.
+          Never retry. Never weaken mode.
+        mode_change: false
+        floor_bounded: true  # trivially: no retry at any mode
+
+    disallowed_verdicts:
+      - RETRY
+      - REFRAGMENT
+      - EXTEND_TIMEOUT
+      - OBSERVE_AND_WAIT
+      - FAIL  # FAIL implies a retry path; use DISCARD_AND_LOG instead
+
+  FLOOR_UNREACHABLE:
+    description: >
+      Not a cause class per se, but a cross-cutting sentinel that the controller
+      emits when NO action in the allowed set can keep the negotiated mode at or
+      above the signed floor. The gateway ceases retrying.
+    action: >
+      Emit FLOOR_UNREACHABLE verdict. Close session. Report to operator.
+      Do NOT downgrade the floor to accommodate the device.

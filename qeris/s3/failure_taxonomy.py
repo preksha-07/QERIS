@@ -33,6 +33,7 @@ class CauseClass(Enum):
 
     Priority order for classification (highest wins):
       SECURITY_FAILURE > MTU_FRAGMENT > LOSS_TIMEOUT > COMPUTE (if enabled)
+      > CAUSE_UNKNOWN (uncertainty / conflicting signals)
     """
     SECURITY_FAILURE = "security_failure"
     # Bad signature, unknown authority, stale/replayed version, mode below floor.
@@ -48,6 +49,12 @@ class CauseClass(Enum):
     COMPUTE = "compute"
     # Peer alive but response arrives only after excessive delay; long key-generation
     # time reported.  Include only if observed in Week-1 pilot data; otherwise drop.
+
+    CAUSE_UNKNOWN = "cause_unknown"
+    # Signals are ambiguous, contradictory, or insufficient to assign a confident
+    # cause.  Blueprint DEC-5 / C4: the classifier MUST abstain rather than guess.
+    # Recovery: at most 1 observation retry window, no profile change, fixed budget.
+    # S4 receives this as an explicit abstention label for the confusion matrix.
 
 
 # Sub-reasons for SECURITY_FAILURE — forwarded to audit_logger and S4.
@@ -287,9 +294,23 @@ class FailureTaxonomy:
                 ),
             )
 
-        # --- Priority 4: Loss / timeout (default) ---
+        # --- Priority 4: Loss / timeout ---
+        if signals.no_response or signals.fragments_missing:
+            return ClassifiedEvent(
+                cause=CauseClass.LOSS_TIMEOUT,
+                signals=signals,
+                label_confidence="high",
+            )
+
+        # --- Priority 5: CAUSE_UNKNOWN — insufficient / conflicting signals ---
+        # Explicit abstention (Blueprint DEC-5 / C4): emit rather than guess.
+        # S4 uses this label as a distinct row/column in the confusion matrix.
         return ClassifiedEvent(
-            cause=CauseClass.LOSS_TIMEOUT,
+            cause=CauseClass.CAUSE_UNKNOWN,
             signals=signals,
-            label_confidence="high" if signals.no_response else "medium",
+            label_confidence="low",
+            notes=(
+                "No dominant signal matched a known cause class. "
+                "Abstaining per DEC-5 policy; at most 1 observation retry allowed."
+            ),
         )
