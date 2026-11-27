@@ -216,6 +216,8 @@ body {
   height: 100vh;
   overflow: hidden;
   background: transparent;
+  position: relative;
+  z-index: 1;
 }
 
 /* Header Component */

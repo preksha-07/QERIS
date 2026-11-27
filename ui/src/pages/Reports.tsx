@@ -22,7 +22,7 @@ export const Reports: React.FC = () => {
       <Header
         status={status}
         title="Reports & Research Evaluation"
-        description="Experimental benchmarking framework and comparative evaluation metrics (S4 Phase Reserved)"
+        description="Experimental benchmarking framework and comparative evaluation metrics (Research Evaluation Phase)"
       />
 
       <div className="main-content">
@@ -51,7 +51,7 @@ export const Reports: React.FC = () => {
                 Research Evaluation & Baseline Framework Notice
               </h3>
               <p style={{ fontSize: 12.5, color: 'var(--text-secondary)', marginTop: 4, lineHeight: 1.6 }}>
-                In strict accordance with the <strong>Master Project Implementation + Research Blueprint</strong>, statistical benchmarks, latency distributions, and throughput figures are generated during formal <strong>Phase S4 Experimental Evaluation</strong>. To maintain scientific authenticity, no synthetic or fabricated test numbers are displayed.
+                In strict accordance with the <strong>Master Project Implementation + Research Blueprint</strong>, statistical benchmarks, latency distributions, and throughput figures are generated during formal <strong>Experimental Evaluation</strong>. To maintain scientific authenticity, no synthetic or fabricated test numbers are displayed.
               </p>
             </div>
           </div>
@@ -86,50 +86,50 @@ export const Reports: React.FC = () => {
                 <tr>
                   <td className="mono" style={{ fontWeight: 700, color: 'var(--accent-cyan)' }}>B0 (PROPOSED)</td>
                   <td style={{ fontWeight: 600 }}>QERIS Proposed Gateway</td>
-                  <td style={{ fontSize: 11.5 }}>Full sensitivity-aware policy engine + S3 adaptive recovery controller.</td>
+                  <td style={{ fontSize: 11.5 }}>Full sensitivity-aware policy engine + adaptive recovery controller.</td>
                   <td><span className="qeris-badge badge-allow">ACTIVE</span></td>
                 </tr>
                 <tr>
                   <td className="mono">B1</td>
                   <td>Static Classical</td>
                   <td style={{ fontSize: 11.5 }}>Pure ECDH / RSA classical cryptography; zero PQC migration.</td>
-                  <td><span className="qeris-badge badge-neutral">FROZEN FOR S4</span></td>
+                  <td><span className="qeris-badge badge-neutral">FROZEN FOR EVALUATION</span></td>
                 </tr>
                 <tr>
                   <td className="mono">B2</td>
                   <td>Static PQC</td>
                   <td style={{ fontSize: 11.5 }}>Forced pure ML-KEM-512 regardless of device resource constraints.</td>
-                  <td><span className="qeris-badge badge-neutral">FROZEN FOR S4</span></td>
+                  <td><span className="qeris-badge badge-neutral">FROZEN FOR EVALUATION</span></td>
                 </tr>
                 <tr>
                   <td className="mono">B3</td>
                   <td>Device Direct Cloud</td>
                   <td style={{ fontSize: 11.5 }}>Bypasses edge gateway; edge nodes connect directly to cloud TLS endpoint.</td>
-                  <td><span className="qeris-badge badge-neutral">FROZEN FOR S4</span></td>
+                  <td><span className="qeris-badge badge-neutral">FROZEN FOR EVALUATION</span></td>
                 </tr>
                 <tr>
                   <td className="mono">B4</td>
                   <td>Fixed Security Floor</td>
                   <td style={{ fontSize: 11.5 }}>Hardcoded non-adaptive security floor with no dynamic policy updates.</td>
-                  <td><span className="qeris-badge badge-neutral">FROZEN FOR S4</span></td>
+                  <td><span className="qeris-badge badge-neutral">FROZEN FOR EVALUATION</span></td>
                 </tr>
                 <tr>
                   <td className="mono">B5</td>
                   <td>Naive PQC Offload</td>
                   <td style={{ fontSize: 11.5 }}>Unconditional offload without sensitivity-guided floor verification.</td>
-                  <td><span className="qeris-badge badge-neutral">FROZEN FOR S4</span></td>
+                  <td><span className="qeris-badge badge-neutral">FROZEN FOR EVALUATION</span></td>
                 </tr>
                 <tr>
                   <td className="mono">B6</td>
                   <td>Non-Adaptive PQC</td>
-                  <td style={{ fontSize: 11.5 }}>PQC without S3 packet refragmentation or loss-adaptation recovery.</td>
-                  <td><span className="qeris-badge badge-neutral">FROZEN FOR S4</span></td>
+                  <td style={{ fontSize: 11.5 }}>PQC without packet refragmentation or loss-adaptation recovery.</td>
+                  <td><span className="qeris-badge badge-neutral">FROZEN FOR EVALUATION</span></td>
                 </tr>
                 <tr>
                   <td className="mono">B7</td>
                   <td>Untrusted Metadata Baseline</td>
                   <td style={{ fontSize: 11.5 }}>Relies on unverified client-reported sensitivities to demonstrate risk.</td>
-                  <td><span className="qeris-badge badge-neutral">FROZEN FOR S4</span></td>
+                  <td><span className="qeris-badge badge-neutral">FROZEN FOR EVALUATION</span></td>
                 </tr>
               </tbody>
             </table>
@@ -141,7 +141,7 @@ export const Reports: React.FC = () => {
           <div className="qeris-card">
             <h3 className="qeris-card-title">
               <Layers size={16} color="var(--accent-blue)" />
-              S4 Experimental Evaluation Target Metrics
+              Experimental Evaluation Target Metrics
             </h3>
             <ul style={{ listStyle: 'none', padding: 0, marginTop: 12, display: 'flex', flexDirection: 'column', gap: 10, fontSize: 12.5 }}>
               <li style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -150,7 +150,7 @@ export const Reports: React.FC = () => {
               </li>
               <li style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <CheckCircle size={15} color="var(--status-allow)" />
-                <strong>Packet Delivery Ratio:</strong> Lossy channels with and without S3 adaptation
+                <strong>Packet Delivery Ratio:</strong> Lossy channels with and without adaptation
               </li>
               <li style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <CheckCircle size={15} color="var(--status-allow)" />
@@ -169,11 +169,11 @@ export const Reports: React.FC = () => {
               Automated Artifact Exporter
             </h3>
             <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 8, lineHeight: 1.5 }}>
-              The S4 benchmarking suite generates publication-ready LaTeX tables, CSV raw datasets, and PDF distribution curves directly for the research manuscript.
+              The benchmarking suite generates publication-ready LaTeX tables, CSV raw datasets, and PDF distribution curves directly for the research manuscript.
             </p>
             <div style={{ marginTop: 16 }}>
               <button disabled className="btn btn-secondary" style={{ opacity: 0.6, cursor: 'not-allowed' }}>
-                <FileSpreadsheet size={14} /> Export S4 Dataset (Available in S4 Phase)
+                <FileSpreadsheet size={14} /> Export Dataset (Available in Formal Evaluation Phase)
               </button>
             </div>
           </div>

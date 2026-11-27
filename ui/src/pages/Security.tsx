@@ -8,14 +8,14 @@ import { Header } from '../components/Header';
 import { getGatewayStatus, getSecurityEvents } from '../services/api';
 import type { GatewayStatus, SecurityEvent, S3TaxonomyItem } from '../types/qeris';
 
-const S3_TAXONOMY: S3TaxonomyItem[] = [
+const RECOVERY_TAXONOMY: S3TaxonomyItem[] = [
   {
     failureClass: 'SECURITY_FAILURE',
     title: 'Security Floor / Cryptographic Failure',
     description: 'Protocol violation, signature failure, or attempt to downgrade below authoritative floor.',
     action: 'DISCARD_AND_LOG',
     floorSafety: 'Strict Discard. No downgrade permitted under any condition.',
-    provenance: 'Master Blueprint Invariant I1 & S3 Recovery Engine',
+    provenance: 'Master Blueprint Invariant I1 & Failure Recovery Engine',
   },
   {
     failureClass: 'MTU_FRAGMENTATION',
@@ -23,7 +23,7 @@ const S3_TAXONOMY: S3TaxonomyItem[] = [
     description: 'PQC public key or ciphertext exceeds edge transport maximum transmission unit.',
     action: 'REFRAGMENT',
     floorSafety: 'Preserve PQC floor via application-level fragmentation without weakening crypto.',
-    provenance: 'Master Blueprint S3 §4.2 Network Resilience',
+    provenance: 'Master Blueprint §4.2 Network Resilience',
   },
   {
     failureClass: 'LOSS_TIMEOUT',
@@ -31,7 +31,7 @@ const S3_TAXONOMY: S3TaxonomyItem[] = [
     description: 'Lossy wireless link causing handshake expiration or dropped roundtrips.',
     action: 'EXTEND_TIMEOUT',
     floorSafety: 'Exponential backoff retry preserving identical cryptographic profile floor.',
-    provenance: 'Master Blueprint S3 §4.3 Link Loss Adaptation',
+    provenance: 'Master Blueprint §4.3 Link Loss Adaptation',
   },
   {
     failureClass: 'CAUSE_UNKNOWN',
@@ -39,7 +39,7 @@ const S3_TAXONOMY: S3TaxonomyItem[] = [
     description: 'Failure signature does not match deterministic security or network telemetry.',
     action: 'OBSERVE_AND_WAIT',
     floorSafety: 'Safe fallback: quarantine anomaly observation window before retrying or dropping.',
-    provenance: 'Master Blueprint DEC-3 / S3 Invariant I7 Verified',
+    provenance: 'Master Blueprint DEC-3 / Invariant I7 Verified',
   },
 ];
 
@@ -67,28 +67,28 @@ export const Security: React.FC = () => {
       <Header
         status={status}
         onRefresh={fetchData}
-        title="Security & S3 Adaptive Recovery"
+        title="Security & Adaptive Recovery"
         description="Failure taxonomy classification, policy epoch transition safety, and live security events"
       />
 
       <div className="main-content">
-        {/* S3 Research Contribution: Failure Taxonomy */}
+        {/* Failure Taxonomy */}
         <div className="qeris-card" style={{ marginBottom: 24 }}>
           <div className="qeris-card-header">
             <div>
               <h2 className="qeris-card-title">
                 <Layers size={16} color="var(--accent-cyan)" />
-                S3 Adaptive Failure Taxonomy & Recovery Actions
+                Adaptive Failure Taxonomy & Recovery Actions
               </h2>
               <p className="qeris-card-subtitle">
                 Mathematical recovery mapping preserving security floor across all failure classes
               </p>
             </div>
-            <span className="qeris-badge badge-neutral mono">S3 NOVEL CONTRIBUTION</span>
+            <span className="qeris-badge badge-neutral mono">RESILIENCE SPECIFICATION</span>
           </div>
 
           <div className="grid-2">
-            {S3_TAXONOMY.map((item) => (
+            {RECOVERY_TAXONOMY.map((item) => (
               <div
                 key={item.failureClass}
                 style={{

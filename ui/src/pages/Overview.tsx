@@ -107,7 +107,7 @@ export const Overview: React.FC = () => {
               {floorUnreachableCount}
             </div>
             <div className="kpi-footer">
-              <span className="qeris-badge badge-unreachable" style={{ padding: '2px 6px' }}>S3 Hook Active</span>
+              <span className="qeris-badge badge-unreachable" style={{ padding: '2px 6px' }}>Adaptive Hook Active</span>
               <span>Device capability deficient</span>
             </div>
           </div>
@@ -143,7 +143,7 @@ export const Overview: React.FC = () => {
                   Device Leg: CoAP / TCP / Raw
                 </span>
                 <span className="qeris-badge badge-info mono" style={{ fontSize: 10, justifyContent: 'center' }}>
-                  S1: ML-KEM-512 / X25519
+                  PQ Crypto: ML-KEM-512 / X25519
                 </span>
               </div>
             </div>
@@ -165,7 +165,7 @@ export const Overview: React.FC = () => {
                 <strong style={{ fontSize: 14, color: 'var(--accent-cyan)' }}>QERIS Security Gateway</strong>
               </div>
               <p style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 10 }}>
-                Authoritative Policy Engine + S3 Adaptive Recovery Controller
+                Authoritative Policy Engine + Adaptive Recovery Controller
               </p>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 6, textAlign: 'left' }}>
                 <div style={{ background: '#fff', padding: '6px 8px', borderRadius: 6, border: '1px solid var(--border)' }}>
@@ -173,7 +173,7 @@ export const Overview: React.FC = () => {
                   <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--status-allow)' }}>DEC-1 to DEC-4 Check</div>
                 </div>
                 <div style={{ background: '#fff', padding: '6px 8px', borderRadius: 6, border: '1px solid var(--border)' }}>
-                  <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)' }}>S3 RECOVERY HOOK</div>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)' }}>ADAPTIVE RECOVERY HOOK</div>
                   <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--status-observe)' }}>Failure Classification</div>
                 </div>
               </div>
@@ -265,9 +265,12 @@ export const Overview: React.FC = () => {
             <div className="qeris-card-header">
               <h3 className="qeris-card-title">
                 <Activity size={16} color="var(--accent-cyan)" />
-                Real-Time Gateway Ingress Stream
+                Gateway Ingress Stream
               </h3>
-              <span className="qeris-badge badge-neutral" style={{ fontSize: 10 }}>Live Log Stream</span>
+              <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                <span className="qeris-badge badge-neutral mono" style={{ fontSize: 9.5 }}>DEMO AUDIT LOG</span>
+                <span className="qeris-badge badge-neutral" style={{ fontSize: 10 }}>Ingress Feed</span>
+              </div>
             </div>
 
             <div style={{ maxHeight: 270, overflowY: 'auto' }}>

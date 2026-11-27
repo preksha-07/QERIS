@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Sidebar } from './components/Sidebar';
+import { CyberBackground } from './components/CyberBackground';
 import { Overview } from './pages/Overview';
 import { Flows } from './pages/Flows';
 import { Devices } from './pages/Devices';
@@ -30,6 +31,7 @@ function App() {
   return (
     <BrowserRouter>
       <div className="app-layout">
+        <CyberBackground />
         <Sidebar
           gatewayOnline={gatewayOnline}
           baselineMode={gwStatus?.baseline_mode}

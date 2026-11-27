@@ -102,7 +102,7 @@ export const Flows: React.FC = () => {
                   <th>Minimum Req</th>
                   <th>Requested</th>
                   <th>Decision</th>
-                  <th>S3 Verdict</th>
+                  <th>Recovery Verdict</th>
                   <th>Action</th>
                 </tr>
               </thead>
@@ -277,7 +277,7 @@ export const Flows: React.FC = () => {
 
               <div>
                 <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 4 }}>
-                  S3 ADAPTIVE RECOVERY CLASSIFICATION
+                  ADAPTIVE RECOVERY CLASSIFICATION
                 </div>
                 <div style={{ background: '#f5f3ff', border: '1px solid #ddd6fe', borderRadius: 8, padding: 12 }}>
                   <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--status-observe)' }}>

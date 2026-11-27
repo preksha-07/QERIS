@@ -32,7 +32,7 @@ export const CloudMonitor: React.FC = () => {
         status={status}
         onRefresh={fetchData}
         title="Cloud & Telemetry Forwarding"
-        description="S2 Cloud Forwarder monitor, mutual TLS egress channel, and SQLite telemetry store"
+        description="Gateway Cloud Forwarder monitor, mutual TLS egress channel, and SQLite telemetry store"
       />
 
       <div className="main-content">
@@ -58,7 +58,7 @@ export const CloudMonitor: React.FC = () => {
               </div>
               <h4 style={{ fontSize: 13, fontWeight: 700, marginBottom: 4 }}>Post-Quantum Edge Channel</h4>
               <p style={{ fontSize: 11.5, color: 'var(--text-secondary)' }}>
-                Protected with ML-KEM-512 / X25519 hybrid KEM and AES-256-GCM. Designed for constrained edge nodes with S3 adaptive re-fragmentation.
+                Protected with ML-KEM-512 / X25519 hybrid KEM and AES-256-GCM. Designed for constrained edge nodes with adaptive re-fragmentation.
               </p>
             </div>
 

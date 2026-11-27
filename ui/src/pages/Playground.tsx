@@ -263,7 +263,7 @@ export const Playground: React.FC = () => {
                   </div>
                 </div>
 
-                {/* S3 Verdict & Floor Comparison */}
+                {/* Recovery Verdict & Floor Comparison */}
                 <div style={{ background: '#f8fafc', padding: 12, borderRadius: 8, border: '1px solid var(--border)' }}>
                   <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
                     Blueprint Invariant Checks
@@ -278,7 +278,7 @@ export const Playground: React.FC = () => {
                       <strong className="mono">{result.gateway.requested_mode}</strong>
                     </div>
                     <div>
-                      <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>S3 Verdict:</span>{' '}
+                      <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Recovery Verdict:</span>{' '}
                       <span className="mono" style={{ color: 'var(--status-observe)', fontWeight: 600 }}>
                         {result.gateway.s3_verdict || 'NOMINAL'}
                       </span>
