@@ -1,5 +1,5 @@
-// QERIS Type Definitions
-// These interfaces mirror the real backend data structures.
+// QERIS Master Type Definitions
+// Authoritative definitions matching the Master Blueprint and S2+S3 Backend.
 
 export type SecurityMode = 'CLASSICAL' | 'HYBRID' | 'PQC';
 export type Decision = 'ALLOW' | 'REJECT' | 'FLOOR_UNREACHABLE';
@@ -16,6 +16,19 @@ export interface FlowRequest {
   device_id: string;
   flow_id: string;
   requested_mode: SecurityMode;
+  requested_profile?: string;
+  device_reported_sensitivity?: Sensitivity;
+  payload?: any;
+}
+
+export interface ReadinessEvaluation {
+  device_id?: string;
+  status?: string;
+  can_support_pqc?: boolean;
+  can_support_hybrid?: boolean;
+  recommended_profile?: string;
+  requires_fragmentation?: boolean;
+  reason?: string;
 }
 
 export interface FlowResponse {
@@ -25,6 +38,7 @@ export interface FlowResponse {
   policy_version: number | null;
   authority_id: string | null;
   requested_mode: SecurityMode;
+  requested_profile?: string;
   decision: Decision;
   reason: string;
   baseline_mode?: string;
@@ -32,15 +46,7 @@ export interface FlowResponse {
   floor_violation?: boolean;
   s3_verdict?: string;
   policy_digest?: string;
-  readiness?: {
-    device_id?: string;
-    status?: string;
-    can_support_pqc?: boolean;
-    can_support_hybrid?: boolean;
-    recommended_profile?: string;
-    requires_fragmentation?: boolean;
-    reason?: string;
-  };
+  readiness?: ReadinessEvaluation;
 }
 
 export interface Policy {
@@ -49,17 +55,26 @@ export interface Policy {
   minimum_mode: SecurityMode;
   policy_version: number;
   authority_id: string;
+  approved_profiles?: string[];
+  signature_verified?: boolean;
 }
 
 export interface Device {
   device_id: string;
   supported_modes: SecurityMode[];
+  supported_profiles?: string[];
   status: DeviceStatus;
+  mtu?: number;
+  ram_bytes?: number;
+  quarantined?: boolean;
 }
 
 export interface AuditLog {
-  id: string;
-  timestamp: string;
+  id?: string;
+  event_id?: string;
+  timestamp?: string;
+  timestamp_iso?: string;
+  ts?: number;
   device_id: string;
   flow_id: string;
   sensitivity: Sensitivity | null;
@@ -68,12 +83,17 @@ export interface AuditLog {
   policy_version: number | null;
   decision: Decision;
   reason: string;
+  s3_verdict?: string;
+  recovery_action?: string;
+  cause_label?: string;
+  policy_epoch?: number;
 }
 
 export interface SecurityEvent {
   id: string;
+  event_id?: string;
   timestamp: string;
-  type: 'DOWNGRADE_BLOCKED' | 'FLOOR_UNREACHABLE' | 'UNKNOWN_FLOW' | 'ALLOW';
+  type: 'DOWNGRADE_BLOCKED' | 'FLOOR_UNREACHABLE' | 'UNKNOWN_FLOW' | 'QUARANTINE' | 'ALLOW';
   flow_id: string;
   device_id: string;
   sensitivity: Sensitivity | null;
@@ -81,6 +101,8 @@ export interface SecurityEvent {
   requested_mode: SecurityMode;
   decision: Decision;
   reason: string;
+  s3_verdict?: string;
+  recovery_action?: string;
 }
 
 export interface GatewayStatus {
@@ -91,9 +113,12 @@ export interface GatewayStatus {
   policy_installed?: boolean;
   active_policy_version?: number;
   active_policy_digest?: string;
+  authority_id?: string;
   cloud_queue_size?: number;
   cloud_dropped_count?: number;
   active_sessions_count?: number;
+  verified_flows_count?: number;
+  registered_devices_count?: number;
 }
 
 export interface DashboardStats {
@@ -106,12 +131,16 @@ export interface DashboardStats {
 
 export interface CloudStats {
   total_records: number;
+  forwarded_records: number;
+  outage_buffer_size: number;
+  outage_dropped_count: number;
+  cloud_healthy: boolean;
   breakdown: Record<string, number>;
   by_sensitivity: Record<string, number>;
 }
 
 export interface CloudRecord {
-  id: number;
+  id?: number;
   event_id: string;
   device_id: string;
   flow_id: string;
@@ -122,7 +151,7 @@ export interface CloudRecord {
   policy_digest: string;
   payload: any;
   gateway_decision: string;
-  received_at: number;
+  received_at?: number;
 }
 
 export interface BaselineConfig {
@@ -134,51 +163,53 @@ export interface BaselineConfig {
   all_available_baselines?: string[];
 }
 
-// ─── Transmission / Crypto Result ─────────────────────────────────────────────
-// Populated by S4 when the real backend + S1 crypto layer is connected.
-// The UI displays these fields when present; they are null/undefined offline.
 export interface CryptoResult {
-  /** Hex-encoded ciphertext (AES-256-GCM output from S1) */
   ciphertext_hex: string | null;
-  /** Hex-encoded encapsulated KEM key used for this transmission */
   kem_encapsulated_key_hex: string | null;
-  /** The decrypted/received plaintext message confirmed by the gateway */
   decrypted_message: string | null;
-  /** Algorithm suite used, e.g. "ML-KEM-768 + HKDF-SHA256 + AES-256-GCM" */
   algorithm: string | null;
-  /** Crypto/transmission status label */
   crypto_status: 'SECURE' | 'DEGRADED' | 'UNAVAILABLE' | null;
 }
 
-// ─── Full transmission result (gateway decision + optional crypto) ─────────────
 export interface TransmissionResult {
-  /** The gateway's policy decision */
   gateway: FlowResponse;
-  /** Crypto/data-path result — null until S4 connects the backend + S1 */
   crypto: CryptoResult | null;
-  /** The original user-entered message */
   message: string;
-  /** Telemetry delivery status if forwarded to cloud */
   telemetry_status?: string;
-  /** Cloud delivery state e.g. FORWARDED_TO_CLOUD or QUEUED_FOR_CLOUD */
   cloud_delivery?: string;
-  /** Unique telemetry event ID */
   event_id?: string;
-  /** Outage buffer queue size */
   queue_size?: number;
 }
 
-// Failure classification for S3 / future recovery module
+// S3 Failure Recovery Taxonomy
 export type FailureClass =
-  | 'LOSS_TIMEOUT'
+  | 'SECURITY_FAILURE'
   | 'MTU_FRAGMENTATION'
+  | 'LOSS_TIMEOUT'
   | 'RESOURCE_COMPUTE'
-  | 'SECURITY_FAILURE';
+  | 'CAUSE_UNKNOWN';
 
 export interface FailureRecovery {
   failureClass: FailureClass;
   label: string;
   recommendedRecovery: string;
   securityFloorPreserved: boolean;
-  available: boolean; // false = future/mock
+  available: boolean;
+}
+
+export type RecoveryAction =
+  | 'RETRY'
+  | 'REFRAGMENT'
+  | 'EXTEND_TIMEOUT'
+  | 'OBSERVE_AND_WAIT'
+  | 'FAIL'
+  | 'DISCARD_AND_LOG';
+
+export interface S3TaxonomyItem {
+  failureClass: FailureClass;
+  title: string;
+  description: string;
+  action: RecoveryAction;
+  floorSafety: string;
+  provenance: string;
 }

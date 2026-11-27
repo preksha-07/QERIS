@@ -14,9 +14,9 @@ export const AuditLogs: React.FC = () => {
   const [selectedLog, setSelectedLog] = useState<AuditLog | null>(null);
 
   useEffect(() => {
-    getAuditLogs().then(({ data, mocked }) => {
+    getAuditLogs().then((data) => {
       setLogs(data);
-      setIsMocked(mocked);
+      setIsMocked(false);
     });
   }, []);
 
@@ -34,10 +34,11 @@ export const AuditLogs: React.FC = () => {
 
   // Newest first
   const sorted = [...filtered].sort(
-    (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+    (a, b) => new Date(b.timestamp || '').getTime() - new Date(a.timestamp || '').getTime()
   );
 
-  function formatTime(ts: string) {
+  function formatTime(ts?: string) {
+    if (!ts) return 'N/A';
     return new Date(ts).toLocaleTimeString('en-US', {
       hour12: false,
       hour: '2-digit',

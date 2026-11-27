@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Sidebar } from './components/Sidebar';
-import { Dashboard } from './pages/Dashboard';
+import { Overview } from './pages/Overview';
 import { Flows } from './pages/Flows';
 import { Devices } from './pages/Devices';
+import { Playground } from './pages/Playground';
 import { Policies } from './pages/Policies';
 import { Security } from './pages/Security';
-import { AuditLogs } from './pages/AuditLogs';
+import { CloudMonitor } from './pages/Cloud';
+import { Reports } from './pages/Reports';
 import { getGatewayStatus } from './services/api';
 import type { GatewayStatus } from './types/qeris';
 
@@ -15,31 +17,39 @@ function App() {
   const [gwStatus, setGwStatus] = useState<GatewayStatus | null>(null);
 
   useEffect(() => {
-    // Check gateway status on load and every 15s
     const check = async () => {
       const status = await getGatewayStatus();
       setGatewayOnline(status.online);
       setGwStatus(status);
     };
     check();
-    const interval = setInterval(check, 15000);
+    const interval = setInterval(check, 10000);
     return () => clearInterval(interval);
   }, []);
 
   return (
     <BrowserRouter>
       <div className="app-layout">
-        <Sidebar gatewayOnline={gatewayOnline} baselineMode={gwStatus?.baseline_mode} />
-        <main className="main-content">
+        <Sidebar
+          gatewayOnline={gatewayOnline}
+          baselineMode={gwStatus?.baseline_mode}
+          policyVersion={gwStatus?.active_policy_version}
+        />
+        <div className="main-wrapper">
           <Routes>
-            <Route path="/" element={<Dashboard gatewayOnline={gatewayOnline} />} />
+            <Route path="/" element={<Overview />} />
             <Route path="/flows" element={<Flows />} />
             <Route path="/devices" element={<Devices />} />
+            <Route path="/playground" element={<Playground />} />
             <Route path="/policies" element={<Policies />} />
             <Route path="/security" element={<Security />} />
-            <Route path="/audit" element={<AuditLogs />} />
+            <Route path="/cloud" element={<CloudMonitor />} />
+            <Route path="/reports" element={<Reports />} />
+            {/* Fallback legacy redirect */}
+            <Route path="/audit" element={<Navigate to="/flows" replace />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
-        </main>
+        </div>
       </div>
     </BrowserRouter>
   );

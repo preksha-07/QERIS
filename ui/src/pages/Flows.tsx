@@ -1,553 +1,302 @@
 import React, { useEffect, useState } from 'react';
-import { Activity, Play, Search } from 'lucide-react';
-import { FlowTable } from '../components/FlowTable';
-import { FlowDetailModal } from '../components/FlowDetailModal';
-import { SecurityEventCard } from '../components/SecurityEvent';
-import { getAuditLogs, getSecurityEvents, checkFlow, checkFlowMock, getDevices, getPolicies } from '../services/api';
-import { demoScenarios } from '../data/mockData';
-import { mockDevices, mockPolicies } from '../data/mockData';
-import type { AuditLog, FlowResponse, SecurityEvent, SecurityMode, Device, Policy } from '../types/qeris';
-import { DecisionBadge, ModeBadge, SensitivityBadge } from '../components/SecurityBadge';
-
-const SECURITY_MODES: SecurityMode[] = ['CLASSICAL', 'HYBRID', 'PQC'];
+import {
+  Filter,
+  Search,
+  ChevronRight,
+  X,
+} from 'lucide-react';
+import { Header } from '../components/Header';
+import { getGatewayStatus, getAuditLogs } from '../services/api';
+import type { GatewayStatus, AuditLog } from '../types/qeris';
 
 export const Flows: React.FC = () => {
+  const [status, setStatus] = useState<GatewayStatus | null>(null);
   const [logs, setLogs] = useState<AuditLog[]>([]);
-  const [events, setEvents] = useState<SecurityEvent[]>([]);
+  const [filterDecision, setFilterDecision] = useState<string>('ALL');
+  const [searchTerm, setSearchTerm] = useState<string>('');
   const [selectedLog, setSelectedLog] = useState<AuditLog | null>(null);
 
-  // ── Demo scenarios state ──────────────────────────────────────────────────
-  const [activeScenario, setActiveScenario] = useState<number | null>(null);
-  const [liveResult, setLiveResult] = useState<FlowResponse | null>(null);
-  const [liveLoading, setLiveLoading] = useState(false);
-  const [liveMocked, setLiveMocked] = useState(false);
-
-  // ── Custom flow check state ───────────────────────────────────────────────
-  const [customDeviceId, setCustomDeviceId] = useState<string>(mockDevices[0].device_id);
-  const [customFlowId, setCustomFlowId] = useState<string>(mockPolicies[0].flow_id);
-  const [customMode, setCustomMode] = useState<SecurityMode>('CLASSICAL');
-  const [customResult, setCustomResult] = useState<FlowResponse | null>(null);
-  const [customLoading, setCustomLoading] = useState(false);
-  const [customMocked, setCustomMocked] = useState(false);
-  const [devices, setDevices] = useState<Device[]>(mockDevices);
-  const [policies, setPolicies] = useState<Policy[]>(mockPolicies);
+  const fetchData = async () => {
+    const [gwStatus, auditLogs] = await Promise.all([
+      getGatewayStatus(),
+      getAuditLogs(),
+    ]);
+    setStatus(gwStatus);
+    setLogs(auditLogs);
+  };
 
   useEffect(() => {
-    getAuditLogs().then(({ data }) => setLogs(data));
-    getSecurityEvents().then(({ data }) => setEvents(data));
-    getDevices().then(({ data }) => {
-      if (data && data.length > 0) setDevices(data);
-    });
-    getPolicies().then(({ data }) => {
-      if (data && data.length > 0) setPolicies(data);
-    });
+    fetchData();
+    const interval = setInterval(fetchData, 4000);
+    return () => clearInterval(interval);
   }, []);
 
-  // ── Demo scenario runner ──────────────────────────────────────────────────
-  async function runScenario(index: number) {
-    const scenario = demoScenarios[index];
-    setActiveScenario(index);
-    setLiveLoading(true);
-    setLiveResult(null);
-
-    const { data, error, mocked } = await checkFlow({
-      device_id: scenario.device_id,
-      flow_id: scenario.flow_id,
-      requested_mode: scenario.requested as SecurityMode,
-    });
-
-    setLiveLoading(false);
-    if (error || !data) {
-      // Gateway unreachable — fall back to scenario mock result
-      setLiveMocked(true);
-      setLiveResult({
-        flow_id: scenario.flow_id,
-        sensitivity: scenario.sensitivity as import('../types/qeris').Sensitivity,
-        minimum_mode: scenario.required as SecurityMode,
-        policy_version: 1,
-        authority_id: 'QERIS-GATEWAY',
-        requested_mode: scenario.requested as SecurityMode,
-        decision: scenario.decision,
-        reason: scenario.reason,
-      });
-    } else {
-      setLiveMocked(mocked);
-      setLiveResult(data);
-    }
-  }
-
-  // ── Custom flow check runner ──────────────────────────────────────────────
-  // S4 integration point:
-  //   When the real backend is ready, replace `checkFlowMock(request)` below
-  //   with `await checkFlow(request)` — the FlowResponse shape is identical.
-  async function runCustomCheck() {
-    setCustomLoading(true);
-    setCustomResult(null);
-
-    const request = {
-      device_id: customDeviceId,
-      flow_id: customFlowId,
-      requested_mode: customMode,
-    };
-
-    // Try the real gateway first; fall back to client-side mock if offline
-    const { data, error } = await checkFlow(request);
-
-    if (!error && data) {
-      setCustomMocked(false);
-      setCustomResult(data);
-    } else {
-      // S4: Remove this fallback once the real endpoint is available
-      const { data: mockData } = checkFlowMock(request);
-      setCustomMocked(true);
-      setCustomResult(mockData);
-    }
-
-    setCustomLoading(false);
-  }
+  const filteredLogs = logs.filter((log) => {
+    const matchesDecision = filterDecision === 'ALL' || log.decision === filterDecision;
+    const matchesSearch =
+      searchTerm === '' ||
+      log.flow_id.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      log.device_id.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      log.reason.toLowerCase().includes(searchTerm.toLowerCase());
+    return matchesDecision && matchesSearch;
+  });
 
   return (
-    <div>
-      <div className="page-header">
-        <h1 className="page-title">Flow Monitor</h1>
-        <p className="page-subtitle">
-          Real-time evaluation of device flow requests against gateway policy
-        </p>
-      </div>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+      <Header
+        status={status}
+        onRefresh={fetchData}
+        title="Live Flow Monitor"
+        description="Comprehensive audit of all active network flows and real-time gateway policy decisions"
+      />
 
-      <div className="page-body">
-
-        {/* ── Custom Flow Check ─────────────────────────────────────────── */}
-        <div className="card section">
-          <div className="card-header">
-            <span className="card-title">
-              <Search size={14} color="var(--accent-cyan)" />
-              Flow Check
-            </span>
-            {customResult && (
-              <span className={customMocked ? "mock-badge" : "live-badge"}>
-                {customMocked ? "OFFLINE MOCK" : "LIVE GATEWAY"}
-              </span>
-            )}
-          </div>
-          <div className="card-body">
-            <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 16 }}>
-              Select a device, flow, and requested security mode, then run the gateway check.
-              Results come from the real gateway when online; falls back to client-side mock when offline.
-            </p>
-
-            {/* Selector row */}
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))',
-                gap: 12,
-                marginBottom: 16,
-              }}
-            >
-              {/* Device */}
-              <div>
-                <label
-                  htmlFor="fc-device"
-                  style={{ display: 'block', fontSize: 11, color: 'var(--text-muted)', marginBottom: 6, letterSpacing: '0.05em' }}
-                >
-                  DEVICE
-                </label>
-                <select
-                  id="fc-device"
-                  value={customDeviceId}
-                  onChange={(e) => setCustomDeviceId(e.target.value)}
-                  style={{
-                    width: '100%',
-                    background: 'var(--surface)',
-                    border: '1px solid var(--border)',
-                    borderRadius: 6,
-                    color: 'var(--text-primary)',
-                    fontSize: 13,
-                    padding: '7px 10px',
-                    cursor: 'pointer',
-                  }}
-                >
-                  {devices.map((d) => (
-                    <option key={d.device_id} value={d.device_id}>
-                      {d.device_id}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Flow */}
-              <div>
-                <label
-                  htmlFor="fc-flow"
-                  style={{ display: 'block', fontSize: 11, color: 'var(--text-muted)', marginBottom: 6, letterSpacing: '0.05em' }}
-                >
-                  FLOW
-                </label>
-                <select
-                  id="fc-flow"
-                  value={customFlowId}
-                  onChange={(e) => setCustomFlowId(e.target.value)}
-                  style={{
-                    width: '100%',
-                    background: 'var(--surface)',
-                    border: '1px solid var(--border)',
-                    borderRadius: 6,
-                    color: 'var(--text-primary)',
-                    fontSize: 13,
-                    padding: '7px 10px',
-                    cursor: 'pointer',
-                  }}
-                >
-                  {policies.map((p) => (
-                    <option key={p.flow_id} value={p.flow_id}>
-                      {p.flow_id}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Requested Mode */}
-              <div>
-                <label
-                  htmlFor="fc-mode"
-                  style={{ display: 'block', fontSize: 11, color: 'var(--text-muted)', marginBottom: 6, letterSpacing: '0.05em' }}
-                >
-                  REQUESTED MODE
-                </label>
-                <select
-                  id="fc-mode"
-                  value={customMode}
-                  onChange={(e) => setCustomMode(e.target.value as SecurityMode)}
-                  style={{
-                    width: '100%',
-                    background: 'var(--surface)',
-                    border: '1px solid var(--border)',
-                    borderRadius: 6,
-                    color: 'var(--text-primary)',
-                    fontSize: 13,
-                    padding: '7px 10px',
-                    cursor: 'pointer',
-                  }}
-                >
-                  {SECURITY_MODES.map((m) => (
-                    <option key={m} value={m}>{m}</option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Run button aligned to bottom */}
-              <div style={{ display: 'flex', alignItems: 'flex-end' }}>
-                <button
-                  onClick={runCustomCheck}
-                  disabled={customLoading}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 6,
-                    width: '100%',
-                    padding: '7px 14px',
-                    background: customLoading ? 'var(--surface)' : 'var(--accent-cyan)',
-                    color: customLoading ? 'var(--text-muted)' : '#000',
-                    border: 'none',
-                    borderRadius: 6,
-                    fontSize: 13,
-                    fontWeight: 600,
-                    cursor: customLoading ? 'not-allowed' : 'pointer',
-                    justifyContent: 'center',
-                    transition: 'opacity 0.15s',
-                  }}
-                >
-                  <Play size={12} />
-                  {customLoading ? 'Checking…' : 'Run Check'}
-                </button>
-              </div>
-            </div>
-
-            {/* Result area */}
-            {!customResult && !customLoading && (
-              <div className="empty-state" style={{ padding: '20px 0' }}>
-                Select inputs and click Run Check to evaluate a flow.
-              </div>
-            )}
-
-            {customLoading && (
-              <div className="empty-state" style={{ padding: '20px 0' }}>
-                <div
-                  style={{
-                    width: 20,
-                    height: 20,
-                    border: '2px solid var(--border)',
-                    borderTop: '2px solid var(--accent-cyan)',
-                    borderRadius: '50%',
-                    animation: 'spin 0.8s linear infinite',
-                    margin: '0 auto 10px',
-                  }}
+      <div className="main-content">
+        {/* Controls and Filters */}
+        <div className="qeris-card" style={{ marginBottom: 20, padding: 14 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1 }}>
+              <div style={{ position: 'relative', flex: 1, maxWidth: 360 }}>
+                <Search size={15} style={{ position: 'absolute', left: 10, top: 10, color: 'var(--text-muted)' }} />
+                <input
+                  type="text"
+                  placeholder="Filter by Flow ID, Device ID, or reason..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="qeris-input"
+                  style={{ paddingLeft: 32 }}
                 />
-                Querying gateway…
               </div>
-            )}
 
-            {customResult && !customLoading && (
-              <div
-                style={{
-                  borderTop: '1px solid var(--border)',
-                  paddingTop: 14,
-                  marginTop: 4,
-                }}
-              >
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 24px' }}>
-                  <div className="modal-row">
-                    <span className="modal-key">Flow</span>
-                    <span className="modal-val">{customResult.flow_id}</span>
-                  </div>
-                  <div className="modal-row">
-                    <span className="modal-key">Decision</span>
-                    <span className="modal-val">
-                      <DecisionBadge decision={customResult.decision} />
-                    </span>
-                  </div>
-                  <div className="modal-row">
-                    <span className="modal-key">Sensitivity</span>
-                    <span className="modal-val">
-                      {customResult.sensitivity
-                        ? <SensitivityBadge sensitivity={customResult.sensitivity} />
-                        : <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>—</span>}
-                    </span>
-                  </div>
-                  <div className="modal-row">
-                    <span className="modal-key">Reason</span>
-                    <span className="modal-val" style={{ fontSize: 11, color: 'var(--text-secondary)', textAlign: 'right', maxWidth: 200 }}>
-                      {customResult.reason}
-                    </span>
-                  </div>
-                  <div className="modal-row">
-                    <span className="modal-key">Security Floor</span>
-                    <span className="modal-val">
-                      {customResult.minimum_mode
-                        ? <ModeBadge mode={customResult.minimum_mode} />
-                        : <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>—</span>}
-                    </span>
-                  </div>
-                  <div className="modal-row">
-                    <span className="modal-key">Policy Version</span>
-                    <span className="modal-val">
-                      {customResult.policy_version != null ? `v${customResult.policy_version}` : '—'}
-                    </span>
-                  </div>
-                  <div className="modal-row">
-                    <span className="modal-key">Requested Mode</span>
-                    <span className="modal-val">
-                      <ModeBadge mode={customResult.requested_mode} />
-                    </span>
-                  </div>
-                  <div className="modal-row">
-                    <span className="modal-key">Authority</span>
-                    <span className="modal-val">
-                      {customResult.authority_id ?? '—'}
-                    </span>
-                  </div>
-                  {customResult.s3_verdict && (
-                    <div className="modal-row">
-                      <span className="modal-key">S3 Verdict</span>
-                      <span className="modal-val" style={{ color: 'var(--accent-cyan)' }}>
-                        {customResult.s3_verdict}
-                      </span>
-                    </div>
-                  )}
-                  {customResult.baseline_mode && (
-                    <div className="modal-row">
-                      <span className="modal-key">Baseline</span>
-                      <span className="modal-val" style={{ color: 'var(--text-secondary)' }}>
-                        {customResult.baseline_mode}
-                      </span>
-                    </div>
-                  )}
-                </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <Filter size={15} color="var(--text-muted)" />
+                <select
+                  value={filterDecision}
+                  onChange={(e) => setFilterDecision(e.target.value)}
+                  className="qeris-select"
+                  style={{ width: 170 }}
+                >
+                  <option value="ALL">All Decisions</option>
+                  <option value="ALLOW">ALLOW Only</option>
+                  <option value="REJECT">REJECT Only</option>
+                  <option value="FLOOR_UNREACHABLE">FLOOR_UNREACHABLE</option>
+                </select>
               </div>
-            )}
+            </div>
+
+            <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+              Showing <strong>{filteredLogs.length}</strong> of <strong>{logs.length}</strong> events
+            </div>
           </div>
         </div>
 
-        {/* ── Demo Scenarios ────────────────────────────────────────────── */}
-        <div className="grid-2 section">
-          <div className="card">
-            <div className="card-header">
-              <span className="card-title">
-                <Play size={14} color="var(--accent-cyan)" />
-                Demo Scenarios
-              </span>
-            </div>
-            <div className="card-body">
-              <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 14 }}>
-                Run live requests against the gateway. Falls back to mock if gateway is offline.
-              </p>
-              <div className="demo-panel">
-                {demoScenarios.map((s, i) => (
-                  <button
-                    key={i}
-                    id={`demo-scenario-${i}`}
-                    className={`demo-scenario-btn ${activeScenario === i ? 'active' : ''}`}
-                    onClick={() => runScenario(i)}
-                  >
-                    <div>
-                      <div className="demo-scenario-title">{s.label}</div>
-                      <div className="demo-scenario-sub">
-                        {s.flow_id} · {s.device_id} · {s.requested} → {s.decision}
-                      </div>
-                    </div>
-                    <Play size={12} color="var(--accent-cyan)" />
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {/* Live Result */}
-          <div className="card">
-            <div className="card-header">
-              <span className="card-title">
-                <Activity size={14} color="var(--accent-cyan)" />
-                Gateway Response
-              </span>
-              {liveResult && (
-                <span className={liveMocked ? "mock-badge" : "live-badge"}>
-                  {liveMocked ? "OFFLINE MOCK" : "LIVE GATEWAY"}
-                </span>
-              )}
-            </div>
-            <div className="card-body">
-              {!liveResult && !liveLoading && (
-                <div className="empty-state" style={{ padding: '30px 0' }}>
-                  Select a scenario to run a live gateway check.
-                </div>
-              )}
-              {liveLoading && (
-                <div className="empty-state" style={{ padding: '30px 0' }}>
-                  <div
-                    style={{
-                      width: 24,
-                      height: 24,
-                      border: '2px solid var(--border)',
-                      borderTop: '2px solid var(--accent-cyan)',
-                      borderRadius: '50%',
-                      animation: 'spin 0.8s linear infinite',
-                      margin: '0 auto 10px',
-                    }}
-                  />
-                  Querying gateway…
-                </div>
-              )}
-              {liveResult && !liveLoading && (
-                <div>
-                  <div className="modal-row">
-                    <span className="modal-key">Flow</span>
-                    <span className="modal-val">{liveResult.flow_id}</span>
-                  </div>
-                  <div className="modal-row">
-                    <span className="modal-key">Sensitivity</span>
-                    <span className="modal-val">
-                      <SensitivityBadge sensitivity={liveResult.sensitivity} />
-                    </span>
-                  </div>
-                  <div className="modal-row">
-                    <span className="modal-key">Security Floor</span>
-                    <span className="modal-val">
-                      <ModeBadge mode={liveResult.minimum_mode} />
-                    </span>
-                  </div>
-                  <div className="modal-row">
-                    <span className="modal-key">Requested Mode</span>
-                    <span className="modal-val">
-                      <ModeBadge mode={liveResult.requested_mode} />
-                    </span>
-                  </div>
-                  <div className="modal-row">
-                    <span className="modal-key">Policy Version</span>
-                    <span className="modal-val">v{liveResult.policy_version}</span>
-                  </div>
-                  <div className="modal-row">
-                    <span className="modal-key">Authority</span>
-                    <span className="modal-val">{liveResult.authority_id}</span>
-                  </div>
-                  <div
-                    className="modal-row"
-                    style={{ marginTop: 8, paddingTop: 12, borderTop: '1px solid var(--border)' }}
-                  >
-                    <span className="modal-key" style={{ fontSize: 13 }}>Decision</span>
-                    <span className="modal-val">
-                      <DecisionBadge decision={liveResult.decision} />
-                    </span>
-                  </div>
-                  <div className="modal-row">
-                    <span className="modal-key">Reason</span>
-                    <span
-                      className="modal-val"
-                      style={{ fontFamily: 'inherit', fontSize: 11, color: 'var(--text-secondary)', textAlign: 'right', maxWidth: 200 }}
+        {/* Flows Table */}
+        <div className="qeris-card" style={{ padding: 0 }}>
+          <div className="qeris-table-container" style={{ border: 'none' }}>
+            <table className="qeris-table">
+              <thead>
+                <tr>
+                  <th>Event ID / Timestamp</th>
+                  <th>Device ID</th>
+                  <th>Flow ID</th>
+                  <th>Sensitivity</th>
+                  <th>Minimum Req</th>
+                  <th>Requested</th>
+                  <th>Decision</th>
+                  <th>S3 Verdict</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredLogs.length === 0 ? (
+                  <tr>
+                    <td colSpan={9} style={{ textAlign: 'center', padding: 32, color: 'var(--text-muted)' }}>
+                      No flows matching filter criteria.
+                    </td>
+                  </tr>
+                ) : (
+                  filteredLogs.map((log, idx) => (
+                    <tr
+                      key={log.id || idx}
+                      onClick={() => setSelectedLog(log)}
+                      style={{ cursor: 'pointer' }}
                     >
-                      {liveResult.reason}
-                    </span>
-                  </div>
-                </div>
-              )}
-            </div>
+                      <td>
+                        <div className="mono" style={{ fontSize: 11, fontWeight: 600 }}>
+                          {log.event_id || `EVT-${idx}`}
+                        </div>
+                        <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>
+                          {log.timestamp ? new Date(log.timestamp).toLocaleTimeString() : 'N/A'}
+                        </div>
+                      </td>
+                      <td className="mono" style={{ fontWeight: 600 }}>{log.device_id}</td>
+                      <td className="mono" style={{ fontWeight: 600, color: 'var(--accent-cyan)' }}>
+                        {log.flow_id}
+                      </td>
+                      <td>
+                        <span className={`qeris-badge ${
+                          log.sensitivity === 'CRITICAL' || log.sensitivity === 'HIGH'
+                            ? 'badge-reject'
+                            : 'badge-neutral'
+                        }`}>
+                          {log.sensitivity ?? 'UNMAPPED'}
+                        </span>
+                      </td>
+                      <td>
+                        <span className="mono" style={{ fontSize: 11 }}>
+                          {log.minimum_mode ?? 'NONE'}
+                        </span>
+                      </td>
+                      <td>
+                        <span className="qeris-badge badge-neutral mono" style={{ fontSize: 10.5 }}>
+                          {log.requested_mode}
+                        </span>
+                      </td>
+                      <td>
+                        <span className={`qeris-badge ${
+                          log.decision === 'ALLOW'
+                            ? 'badge-allow'
+                            : log.decision === 'REJECT'
+                            ? 'badge-reject'
+                            : 'badge-unreachable'
+                        }`}>
+                          {log.decision}
+                        </span>
+                      </td>
+                      <td>
+                        <span className="mono" style={{ fontSize: 11, color: 'var(--status-observe)' }}>
+                          {log.s3_verdict || 'NOMINAL'}
+                        </span>
+                      </td>
+                      <td>
+                        <button className="btn btn-secondary" style={{ padding: '4px 8px', fontSize: 11 }}>
+                          Inspect <ChevronRight size={12} />
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
           </div>
-        </div>
-
-        {/* Security Events */}
-        {events.length > 0 && (
-          <div className="section">
-            <div
-              style={{
-                fontSize: 11,
-                fontWeight: 600,
-                letterSpacing: '0.06em',
-                color: 'var(--text-muted)',
-                textTransform: 'uppercase',
-                marginBottom: 10,
-              }}
-            >
-              Security Events
-            </div>
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
-                gap: 12,
-              }}
-            >
-              {events.map((evt) => (
-                <SecurityEventCard key={evt.id} event={evt} />
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Full Flow Table */}
-        <div className="card section">
-          <div className="card-header">
-            <span className="card-title">
-              <Activity size={14} color="var(--accent-cyan)" />
-              All Flow Records
-            </span>
-            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-              {logs.length} records · click row for details
-            </span>
-          </div>
-          <FlowTable logs={logs} onRowClick={(log) => setSelectedLog(log)} />
         </div>
       </div>
 
+      {/* Slide-out Flow Detail Modal */}
       {selectedLog && (
-        <FlowDetailModal
-          log={selectedLog}
-          onClose={() => setSelectedLog(null)}
-        />
-      )}
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(15, 23, 42, 0.4)',
+          backdropFilter: 'blur(4px)',
+          display: 'flex',
+          justifyContent: 'flex-end',
+          zIndex: 50,
+        }}>
+          <div style={{
+            width: 460,
+            background: '#ffffff',
+            height: '100%',
+            boxShadow: 'var(--shadow-xl)',
+            display: 'flex',
+            flexDirection: 'column',
+            padding: 24,
+            overflowY: 'auto',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+              <div>
+                <h3 style={{ fontSize: 16, fontWeight: 700 }}>Flow Audit Inspection</h3>
+                <p style={{ fontSize: 11, color: 'var(--text-muted)' }}>Event Record {selectedLog.event_id}</p>
+              </div>
+              <button
+                onClick={() => setSelectedLog(null)}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}
+              >
+                <X size={20} />
+              </button>
+            </div>
 
-      <style>{`
-        @keyframes spin { to { transform: rotate(360deg); } }
-      `}</style>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div style={{ background: '#f8fafc', padding: 12, borderRadius: 8, border: '1px solid var(--border)' }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
+                  Gateway Policy Decision
+                </div>
+                <div style={{ marginTop: 4, display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span className={`qeris-badge ${
+                    selectedLog.decision === 'ALLOW'
+                      ? 'badge-allow'
+                      : selectedLog.decision === 'REJECT'
+                      ? 'badge-reject'
+                      : 'badge-unreachable'
+                  }`} style={{ fontSize: 13, padding: '4px 10px' }}>
+                    {selectedLog.decision}
+                  </span>
+                </div>
+                <p style={{ fontSize: 12, marginTop: 8, color: 'var(--text-secondary)' }}>
+                  <strong>Reason:</strong> {selectedLog.reason}
+                </p>
+              </div>
+
+              <div>
+                <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 4 }}>
+                  FLOW PARAMETERS
+                </div>
+                <div className="qeris-table-container">
+                  <table className="qeris-table" style={{ fontSize: 12 }}>
+                    <tbody>
+                      <tr>
+                        <td style={{ color: 'var(--text-muted)', width: 140 }}>Flow Identifier</td>
+                        <td className="mono" style={{ fontWeight: 600 }}>{selectedLog.flow_id}</td>
+                      </tr>
+                      <tr>
+                        <td style={{ color: 'var(--text-muted)' }}>Device Origin</td>
+                        <td className="mono">{selectedLog.device_id}</td>
+                      </tr>
+                      <tr>
+                        <td style={{ color: 'var(--text-muted)' }}>Flow Sensitivity</td>
+                        <td>{selectedLog.sensitivity ?? 'UNMAPPED'}</td>
+                      </tr>
+                      <tr>
+                        <td style={{ color: 'var(--text-muted)' }}>Policy Floor Req</td>
+                        <td className="mono">{selectedLog.minimum_mode ?? 'NONE'}</td>
+                      </tr>
+                      <tr>
+                        <td style={{ color: 'var(--text-muted)' }}>Requested Mode</td>
+                        <td className="mono">{selectedLog.requested_mode}</td>
+                      </tr>
+                      <tr>
+                        <td style={{ color: 'var(--text-muted)' }}>Policy Epoch</td>
+                        <td className="mono">v{selectedLog.policy_version ?? 1}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <div>
+                <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 4 }}>
+                  S3 ADAPTIVE RECOVERY CLASSIFICATION
+                </div>
+                <div style={{ background: '#f5f3ff', border: '1px solid #ddd6fe', borderRadius: 8, padding: 12 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--status-observe)' }}>
+                    Verdict: {selectedLog.s3_verdict || 'NOMINAL_FLOW'}
+                  </div>
+                  <div style={{ fontSize: 11, color: '#6d28d9', marginTop: 4 }}>
+                    Recovery Action: {selectedLog.recovery_action || 'NONE_REQUIRED'}
+                  </div>
+                  {selectedLog.cause_label && (
+                    <div style={{ fontSize: 10, color: '#7c3aed', marginTop: 4 }} className="mono">
+                      Taxonomy Cause: {selectedLog.cause_label}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

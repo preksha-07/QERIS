@@ -74,17 +74,17 @@ export const Dashboard: React.FC<DashboardProps> = ({ gatewayOnline }) => {
   const [showAdminKeyBox, setShowAdminKeyBox] = useState<boolean>(false);
 
   const refreshData = async () => {
-    const { data: logData, mocked: logMocked } = await getAuditLogs();
+    const logData = await getAuditLogs();
     setLogs(logData);
-    setIsLogsMocked(logMocked);
+    setIsLogsMocked(false);
 
-    const { data: evtData } = await getSecurityEvents();
+    const evtData = await getSecurityEvents();
     setEvents(evtData);
 
     const status = await getGatewayStatus();
     setGwStatus(status);
 
-    const { data: baseCfg } = await getBaselineMode();
+    const baseCfg = await getBaselineMode();
     setBaselineConfig(baseCfg);
     if (baseCfg.baseline_mode) {
       setSelectedBaseline(baseCfg.baseline_mode);
@@ -100,15 +100,14 @@ export const Dashboard: React.FC<DashboardProps> = ({ gatewayOnline }) => {
   const handleBaselineChange = async () => {
     setBaselineUpdating(true);
     setStatusMessage(null);
-    const res = await setBaselineMode(selectedBaseline);
+    const ok = await setBaselineMode(selectedBaseline);
     setBaselineUpdating(false);
 
-    if (res.success && res.data) {
-      setBaselineConfig(res.data);
+    if (ok) {
       setStatusMessage(`Baseline mode successfully updated to ${selectedBaseline}`);
       await refreshData();
     } else {
-      setStatusMessage(res.error || 'Failed to update baseline (Admin credentials required)');
+      setStatusMessage('Failed to update baseline (Admin credentials required)');
     }
   };
 
@@ -122,8 +121,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ gatewayOnline }) => {
     if (!window.confirm('Reset gateway experiment state (rate limits, sessions, and cloud queue)?')) {
       return;
     }
-    const res = await resetGatewayState();
-    setStatusMessage(res.message);
+    const ok = await resetGatewayState();
+    setStatusMessage(ok ? 'Gateway reset successful' : 'Gateway reset failed');
     await refreshData();
   };
 

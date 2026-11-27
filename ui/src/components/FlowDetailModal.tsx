@@ -12,7 +12,7 @@ export const FlowDetailModal: React.FC<FlowDetailModalProps> = ({
   log,
   onClose,
 }) => {
-  const time = new Date(log.timestamp).toLocaleString('en-US', {
+  const time = log.timestamp ? new Date(log.timestamp).toLocaleString('en-US', {
     hour12: false,
     year: 'numeric',
     month: 'short',
@@ -20,7 +20,7 @@ export const FlowDetailModal: React.FC<FlowDetailModalProps> = ({
     hour: '2-digit',
     minute: '2-digit',
     second: '2-digit',
-  });
+  }) : 'N/A';
 
   return (
     <div className="modal-overlay" onClick={onClose}>
