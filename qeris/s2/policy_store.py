@@ -25,8 +25,8 @@ from qeris.s2.policy_schema import SignedPolicyEnvelopeModel
 from qeris.s2.policy_verifier import (
     PolicyVerificationResult,
     PolicyVerificationStatus,
-    verify_signed_policy,
 )
+from qeris.s2.policy_bridge import verify_unified_policy as verify_signed_policy
 
 
 @dataclass

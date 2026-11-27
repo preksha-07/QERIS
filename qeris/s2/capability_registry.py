@@ -45,6 +45,7 @@ class DeviceCapabilityProfile:
     last_seen: Optional[float] = None
     recent_results: list[dict[str, Any]] = field(default_factory=list)
     migration_status: str = "MIGRATING"  # LEGACY, MIGRATING, PQC_READY
+    ed25519_public_key_hex: Optional[str] = None
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -67,6 +68,7 @@ class DeviceCapabilityProfile:
             last_seen=data.get("last_seen"),
             recent_results=list(data.get("recent_results", [])),
             migration_status=data.get("migration_status", "MIGRATING"),
+            ed25519_public_key_hex=data.get("ed25519_public_key_hex"),
         )
 
 

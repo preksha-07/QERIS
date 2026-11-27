@@ -44,6 +44,24 @@ class GatewaySessionContext:
     last_seen_at: float
     state: SessionState = SessionState.ACTIVE
     message_envelope: Optional[MessageEnvelope] = None
+    handshake_id: Optional[str] = None
+    crypto_session: Optional[Any] = None
+
+    def encrypt(self, plaintext: bytes) -> bytes:
+        """Encrypts plaintext using S1 CryptoSession (preferred) or S2 MessageEnvelope."""
+        if self.crypto_session is not None:
+            return self.crypto_session.encrypt(plaintext)
+        if self.message_envelope is not None:
+            return self.message_envelope.encrypt(plaintext)
+        raise RuntimeError("No encryption engine available on session")
+
+    def decrypt(self, ciphertext: bytes) -> bytes:
+        """Decrypts ciphertext using S1 CryptoSession (preferred) or S2 MessageEnvelope."""
+        if self.crypto_session is not None:
+            return self.crypto_session.decrypt(ciphertext)
+        if self.message_envelope is not None:
+            return self.message_envelope.decrypt(ciphertext)
+        raise RuntimeError("No decryption engine available on session")
 
     def to_summary_dict(self) -> dict[str, Any]:
         """Safe summary for logging and APIs (omits secret keys)."""
@@ -60,6 +78,7 @@ class GatewaySessionContext:
             "state": self.state.value,
             "created_at": self.created_at,
             "last_seen_at": self.last_seen_at,
+            "handshake_id": self.handshake_id,
         }
 
 
@@ -90,6 +109,7 @@ class SessionManager:
         negotiated_profile: str,
         negotiated_mode: str,
         session_key: bytes,
+        handshake_id: Optional[str] = None,
     ) -> GatewaySessionContext:
         """
         Creates and stores a context-bound session for (device_id, flow_id).
@@ -107,6 +127,22 @@ class SessionManager:
         )
         envelope = MessageEnvelope(session_key=session_key, context_aad=context_aad)
 
+        # Wire S1 CryptoSession
+        crypto_session = None
+        try:
+            from qeris.s2.crypto_adapter import establish_session
+            crypto_session = establish_session(
+                device_id=device_id,
+                flow_id=flow_id,
+                sensitivity=sensitivity,
+                policy_version=policy_envelope.policy.policy_version,
+                session_key=session_key,
+                mode=negotiated_mode,
+                handshake_id=handshake_id,
+            )
+        except Exception:
+            crypto_session = None
+
         ctx = GatewaySessionContext(
             session_id=session_id,
             device_id=device_id,
@@ -123,6 +159,8 @@ class SessionManager:
             last_seen_at=now,
             state=SessionState.ACTIVE,
             message_envelope=envelope,
+            handshake_id=handshake_id,
+            crypto_session=crypto_session,
         )
 
         flow_key = (device_id, flow_id)

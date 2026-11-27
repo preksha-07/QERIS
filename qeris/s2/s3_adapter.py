@@ -26,6 +26,23 @@ except ImportError:
     S3HookResult = None
 
 
+def classify_s1_exception(exc: Exception) -> str:
+    """
+    Maps S1/S2 exception types to S1 status strings for S3 taxonomy consumption.
+    """
+    name = type(exc).__name__
+    msg = str(exc).lower()
+    if name in ("AuthenticationError", "S1AuthenticationError") or "authentication" in msg or "tag" in msg or "signature" in msg:
+        return "INVALID_SIGNATURE"
+    if name in ("ReplayError", "S1ReplayError") or "replay" in msg or "stale" in msg:
+        return "STALE_POLICY"
+    if name in ("CryptoInputError", "ClassicalCryptoInputError", "MessageCryptoError", "PolicyValidationError") or "malformed" in msg:
+        return "INVALID_STRUCTURE"
+    if "timeout" in msg:
+        return "TIMEOUT"
+    return "INVALID_SIGNATURE"
+
+
 class S3IntegrationAdapter:
     """
     Adapter interfacing S2 Gateway decisions with the S3 Security State Machine.

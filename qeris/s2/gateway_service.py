@@ -82,11 +82,26 @@ class HandshakeInitiateRequest(BaseModel):
     scenario: Optional[str] = Field(default=None, description="Benchmark scenario identifier")
 
 
+class DeviceChallengeRequest(BaseModel):
+    device_id: str = Field(..., description="Device requesting authentication challenge")
+
+
+class DeviceAuthVerifyRequest(BaseModel):
+    device_id: str
+    handshake_id: str
+    challenge_nonce_hex: str
+    timestamp: int
+    signature_hex: str
+    public_key_hex: Optional[str] = None
+    flow_id: Optional[str] = None
+
+
 class HandshakeCompleteRequest(BaseModel):
     device_id: str
     flow_id: str
     negotiated_profile: str
     session_key_hex: Optional[str] = None  # In real flow derived via KEM; optional for demo
+    handshake_id: Optional[str] = None     # S1 canonical transcript hash
     run_id: Optional[str] = Field(default=None, description="Experiment run identifier")
 
 
@@ -108,6 +123,7 @@ class RegisterDeviceRequest(BaseModel):
     ram_bytes_available: int = 320 * 1024
     max_packet_size_mtu: int = 1280
     firmware_version: str = "v1.0.0"
+    ed25519_public_key_hex: Optional[str] = None
 
 
 class QuarantineRequest(BaseModel):
@@ -228,6 +244,15 @@ def create_gateway_app(
     from qeris.s2.session_manager import SessionManager
     _session_mgr = SessionManager()
 
+    # S1 Device Auth Challenge Manager (DEC-1)
+    try:
+        from qeris.device_auth import GatewayChallengeManager, verify_device_signature, DeviceAuthStatus
+        _challenge_mgr = GatewayChallengeManager()
+        _DEVICE_AUTH_AVAILABLE = True
+    except Exception:
+        _challenge_mgr = None
+        _DEVICE_AUTH_AVAILABLE = False
+
     # Gateway Operational State
     app.state.policy_store = _policy_store
     app.state.registry = _registry
@@ -236,6 +261,7 @@ def create_gateway_app(
     app.state.audit_logger = _audit_logger
     app.state.s3_adapter = _s3_adapter
     app.state.session_mgr = _session_mgr
+    app.state.challenge_mgr = _challenge_mgr
     app.state.trusted_authorities = _trusted_authorities
 
     # -----------------------------------------------------------------------
@@ -645,6 +671,142 @@ def create_gateway_app(
         response.status_code = res.pop("status_code", 200)
         return res
 
+    @app.post("/api/v1/auth/challenge")
+    def issue_device_challenge(req: DeviceChallengeRequest):
+        """
+        Issues an Ed25519 authentication freshness challenge for the requesting device.
+        Documented as classical authentication pending formal DEC-1 sign-off.
+        """
+        if not _DEVICE_AUTH_AVAILABLE or _challenge_mgr is None:
+            raise HTTPException(status_code=501, detail="Device authentication module unavailable")
+
+        dev = _registry.get_device(req.device_id)
+        if not dev:
+            raise HTTPException(status_code=404, detail=f"Device '{req.device_id}' not enrolled in registry")
+
+        challenge = _challenge_mgr.issue_challenge(req.device_id)
+        _audit_logger.log_event(
+            "device_challenge_issued",
+            device_id=req.device_id,
+            flow_id="*",
+            decision="ISSUED",
+            reason="Freshness challenge issued for device authentication",
+            details={"nonce_hex": challenge.nonce_hex, "expires_at": challenge.expires_at},
+        )
+        return {
+            "device_id": req.device_id,
+            "challenge_nonce_hex": challenge.nonce_hex,
+            "expires_at": challenge.expires_at,
+            "issued_at": challenge.issued_at,
+        }
+
+    @app.post("/api/v1/auth/verify")
+    def verify_device_auth(req: DeviceAuthVerifyRequest):
+        """
+        Verifies canonical Ed25519 device authentication signature over handshake context.
+        Enforces single-use freshness challenges and binds device_id, handshake_id, and timestamp.
+        """
+        if not _DEVICE_AUTH_AVAILABLE or _challenge_mgr is None:
+            raise HTTPException(status_code=501, detail="Device authentication module unavailable")
+
+        dev = _registry.get_device(req.device_id)
+        if not dev:
+            _audit_logger.log_event(
+                "device_auth_failed",
+                device_id=req.device_id,
+                flow_id=req.flow_id or "*",
+                decision="REJECT",
+                reason=f"Unknown device '{req.device_id}'",
+                details={"cause": "security_failure"},
+            )
+            _s3_adapter.process_decision(
+                device_id=req.device_id,
+                flow_id=req.flow_id or "default_flow",
+                sensitivity="HIGH",
+                minimum_mode="CLASSICAL",
+                requested_mode="CLASSICAL",
+                policy_version=1,
+                initial_decision="REJECT",
+                reason=f"Unknown device '{req.device_id}'",
+                s1_status="UNTRUSTED_AUTHORITY",
+            )
+            raise HTTPException(status_code=401, detail=f"Device '{req.device_id}' not enrolled")
+
+        try:
+            nonce_bytes = bytes.fromhex(req.challenge_nonce_hex)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid hex challenge nonce")
+
+        challenge_status = _challenge_mgr.validate_and_consume(req.device_id, nonce_bytes)
+        if challenge_status != DeviceAuthStatus.AUTH_SUCCESS:
+            _audit_logger.log_event(
+                "device_auth_failed",
+                device_id=req.device_id,
+                flow_id=req.flow_id or "*",
+                decision="REJECT",
+                reason=f"Challenge validation failed: {challenge_status.value}",
+                details={"cause": "security_failure"},
+            )
+            raise HTTPException(status_code=401, detail=f"Challenge validation failed: {challenge_status.value}")
+
+        pub_key_hex = req.public_key_hex
+        if not pub_key_hex:
+            pub_key_hex = getattr(dev, "ed25519_public_key_hex", None)
+        if not pub_key_hex:
+            raise HTTPException(status_code=400, detail="No enrolled Ed25519 public key found for device")
+
+        try:
+            pub_bytes = bytes.fromhex(pub_key_hex)
+            sig_bytes = bytes.fromhex(req.signature_hex)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Malformed public key or signature hex")
+
+        is_valid = verify_device_signature(
+            device_id=req.device_id,
+            handshake_id=req.handshake_id,
+            challenge_nonce=nonce_bytes,
+            timestamp=req.timestamp,
+            signature=sig_bytes,
+            enrolled_public_key_bytes=pub_bytes,
+        )
+
+        if not is_valid:
+            _audit_logger.log_event(
+                "device_auth_failed",
+                device_id=req.device_id,
+                flow_id=req.flow_id or "*",
+                decision="REJECT",
+                reason="Invalid Ed25519 device authentication signature",
+                details={"cause": "security_failure"},
+            )
+            _s3_adapter.process_decision(
+                device_id=req.device_id,
+                flow_id=req.flow_id or "default_flow",
+                sensitivity="HIGH",
+                minimum_mode="CLASSICAL",
+                requested_mode="CLASSICAL",
+                policy_version=1,
+                initial_decision="REJECT",
+                reason="Invalid device authentication signature",
+                s1_status="INVALID_SIGNATURE",
+            )
+            raise HTTPException(status_code=401, detail="Device authentication signature verification failed")
+
+        _audit_logger.log_event(
+            "device_authenticated",
+            device_id=req.device_id,
+            flow_id=req.flow_id or "*",
+            decision="ALLOW",
+            reason="Device authenticated successfully via Ed25519 challenge-response",
+            details={"handshake_id": req.handshake_id},
+        )
+        return {
+            "status": "AUTH_SUCCESS",
+            "device_id": req.device_id,
+            "authenticated": True,
+            "handshake_id": req.handshake_id,
+        }
+
     @app.post("/api/v1/handshake/initiate")
     def initiate_handshake(req: HandshakeInitiateRequest, response: Response):
         """
@@ -689,6 +851,7 @@ def create_gateway_app(
             negotiated_profile=req.negotiated_profile,
             negotiated_mode=negotiated_mode,
             session_key=session_key,
+            handshake_id=req.handshake_id,
         )
 
         _audit_logger.log_event(
@@ -702,6 +865,7 @@ def create_gateway_app(
             security_profile=ctx.negotiated_profile,
             policy_version=ctx.policy_version,
             policy_digest=ctx.policy_digest,
+            details={"handshake_id": ctx.handshake_id},
         )
 
         return {
@@ -714,6 +878,7 @@ def create_gateway_app(
             "policy_version": ctx.policy_version,
             "policy_digest": ctx.policy_digest,
             "policy_epoch": ctx.policy_epoch,
+            "handshake_id": ctx.handshake_id,
         }
 
     @app.post("/api/v1/telemetry")
@@ -763,23 +928,40 @@ def create_gateway_app(
 
         # Decrypt envelope if encrypted wire hex provided
         payload_content = req.payload
-        if req.encrypted_envelope_hex and session and session.message_envelope:
+        if req.encrypted_envelope_hex and session:
             try:
                 env_bytes = bytes.fromhex(req.encrypted_envelope_hex)
-                decrypted_bytes = session.message_envelope.decrypt(env_bytes)
+                decrypted_bytes = session.decrypt(env_bytes)
                 import json
                 try:
                     payload_content = json.loads(decrypted_bytes.decode("utf-8"))
                 except Exception:
                     payload_content = decrypted_bytes.decode("utf-8")
             except Exception as exc:
+                exc_name = type(exc).__name__
+                is_replay = "replay" in exc_name.lower() or "replay" in str(exc).lower()
                 _audit_logger.log_event(
                     "telemetry_decryption_failed",
                     device_id=req.device_id,
                     flow_id=req.flow_id,
                     decision="REJECT",
                     reason=f"Envelope decryption or AEAD auth failed: {exc}",
+                    details={"cause": "security_failure", "security_reason": "replayed_version" if is_replay else "bad_signature"},
                 )
+                try:
+                    _s3_adapter.process_decision(
+                        device_id=req.device_id,
+                        flow_id=req.flow_id,
+                        sensitivity=sensitivity,
+                        minimum_mode=session.negotiated_mode if session else "CLASSICAL",
+                        requested_mode=session.negotiated_mode if session else "CLASSICAL",
+                        policy_version=session.policy_version if session else active_envelope.policy.policy_version,
+                        initial_decision="REJECT",
+                        reason=f"Cryptographic telemetry failure: {exc}",
+                        s1_status="STALE_POLICY" if is_replay else "INVALID_SIGNATURE",
+                    )
+                except Exception:
+                    pass
                 raise HTTPException(status_code=400, detail=f"Message authentication failed: {exc}")
 
         # Prepare Cloud Forwarding Package
@@ -912,6 +1094,7 @@ def create_gateway_app(
             ram_bytes_available=req.ram_bytes_available,
             max_packet_size_mtu=req.max_packet_size_mtu,
             firmware_version=req.firmware_version,
+            ed25519_public_key_hex=req.ed25519_public_key_hex,
         )
         _registry.register_device(profile)
         _audit_logger.log_event(

@@ -142,6 +142,8 @@ class ObservedSignals:
             return cls(invalid_format=True)
         if key == "INVALID_SIGNATURE":
             return cls(auth_check_failed=True)
+        if key == "UNTRUSTED_AUTHORITY":
+            return cls(unknown_authority=True)
         if key == "STALE_POLICY":
             # version < last_seen → replay / rollback attempt
             return cls(version_check_failed=True)

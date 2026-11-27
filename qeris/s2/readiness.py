@@ -26,8 +26,8 @@ from qeris.s2.policy_schema import FlowPolicyModel
 # Estimated Wire Sizes per Security Mode
 WIRE_SIZE_MAP: dict[str, int] = {
     "CLASSICAL": 240,    # ClientHello + ServerHello + Finished
-    "HYBRID":    1150,   # X25519 + ML-KEM-512 public keys + ciphertext
-    "PQC":       1820,   # ML-KEM-512 KEM encapsulation + auth / signature
+    "HYBRID":    2336,   # X25519MLKEM768: 1216 (client share) + 1120 (server share)
+    "PQC":       1568,   # ML-KEM-512: 800 (pk) + 768 (ct)
 }
 
 # Profile Memory Requirements in Bytes
