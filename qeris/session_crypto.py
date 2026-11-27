@@ -19,6 +19,7 @@ HASH_LENGTH: Final[int] = 32
 HKDF_SALT: Final[bytes] = b"QERIS-HKDF-SHA256-SALT-v1"
 HKDF_LABEL: Final[bytes] = b"QERIS-SESSION-KEY-v1"
 SESSION_KEY_LENGTH: Final[int] = 32
+HANDSHAKE_TRANSCRIPT_LABEL: Final[bytes] = b"QERIS-HANDSHAKE-TRANSCRIPT-v1"
 
 # FIPS 203 ML-KEM-512 encoded lengths, in bytes.
 PUBLIC_KEY_LENGTH: Final[int] = 800
@@ -182,3 +183,84 @@ def shared_secret_fingerprint(shared_secret: bytes) -> str:
         "shared_secret", shared_secret, SHARED_SECRET_LENGTH
     )
     return hashlib.sha256(shared_secret).hexdigest()
+
+
+def encode_handshake_transcript(
+    public_key: bytes,
+    ciphertext: bytes,
+    *,
+    device_id: str,
+    flow_id: str,
+    sensitivity_tier: str,
+    policy_version: int,
+) -> bytes:
+    """
+    Encode handshake transcript fields unambiguously with length prefixes.
+
+    Fields included:
+    - HANDSHAKE_TRANSCRIPT_LABEL (domain separation)
+    - public_key (device ephemeral KEM public key, length-prefixed)
+    - ciphertext (encapsulated KEM ciphertext, length-prefixed)
+    - context_info (canonical length-prefixed device_id, flow_id,
+      sensitivity_tier, and policy_version)
+
+    Does NOT include private keys or the shared secret.
+    """
+    pk_bytes = _require_bytes("public_key", public_key, PUBLIC_KEY_LENGTH)
+    ct_bytes = _require_bytes("ciphertext", ciphertext, CIPHERTEXT_LENGTH)
+    context_bytes = _context_info(device_id, flow_id, sensitivity_tier, policy_version)
+
+    transcript = bytearray(HANDSHAKE_TRANSCRIPT_LABEL)
+    transcript.extend(struct.pack(">I", len(pk_bytes)))
+    transcript.extend(pk_bytes)
+    transcript.extend(struct.pack(">I", len(ct_bytes)))
+    transcript.extend(ct_bytes)
+    transcript.extend(struct.pack(">I", len(context_bytes)))
+    transcript.extend(context_bytes)
+    return bytes(transcript)
+
+
+def compute_transcript_hash(
+    public_key: bytes,
+    ciphertext: bytes,
+    *,
+    device_id: str,
+    flow_id: str,
+    sensitivity_tier: str,
+    policy_version: int,
+) -> bytes:
+    """Compute raw 32-byte SHA-256 digest of the canonical handshake transcript."""
+    transcript = encode_handshake_transcript(
+        public_key,
+        ciphertext,
+        device_id=device_id,
+        flow_id=flow_id,
+        sensitivity_tier=sensitivity_tier,
+        policy_version=policy_version,
+    )
+    return hashlib.sha256(transcript).digest()
+
+
+def compute_handshake_id(
+    public_key: bytes,
+    ciphertext: bytes,
+    *,
+    device_id: str,
+    flow_id: str,
+    sensitivity_tier: str,
+    policy_version: int,
+) -> str:
+    """
+    Compute a deterministic SHA-256 transcript hash exposed as handshake_id.
+
+    Returns a 64-character lowercase hexadecimal string suitable for
+    identifying and correlating the handshake across gateway logs and analytics.
+    """
+    return compute_transcript_hash(
+        public_key,
+        ciphertext,
+        device_id=device_id,
+        flow_id=flow_id,
+        sensitivity_tier=sensitivity_tier,
+        policy_version=policy_version,
+    ).hex()
